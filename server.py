@@ -1,60 +1,84 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-#       _
-#      | |
-#    __| |_ __ ___  __ _ _ __ ___  ___
-#   / _` | '__/ _ \/ _` | '_ ` _ \/ __|
-#  | (_| | | |  __/ (_| | | | | | \__ \
-#   \__,_|_|  \___|\__,_|_| |_| |_|___/ .
-#
-# A 'Fog Creek'–inspired demo by Kenneth Reitz™
-
 import os
-from flask import Flask, request, render_template, jsonify
+import requests
 
-# Support for gomix's 'front-end' and 'back-end' UI.
-app = Flask(__name__, static_folder='public', template_folder='views')
+from flask import Flask, request, jsonify
 
-# Set the app secret key from the secret environment variables.
-app.secret = os.environ.get('SECRET')
+app = Flask(__name__)
 
-# Dream database. Store dreams in memory for now.
-DREAMS = ['Python. Python, everywhere.']
+# Variables de entorno
+WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
+GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
+PORT = int(os.environ.get("PORT", 5000))  # Puerto por defecto 5000
 
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    # Loguea el mensaje entrante
+    print("Incoming webhook message:", request.json)
 
-@app.after_request
-def apply_kr_hello(response):
-    """Adds some headers to all responses."""
+    # Extrae el mensaje
+    message = (
+        request.json.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+        .get("messages", [{}])[0]
+    )
 
-    # Made by Kenneth Reitz.
-    if 'MADE_BY' in os.environ:
-        response.headers["X-Was-Here"] = os.environ.get('MADE_BY')
+    if message and message.get("type") == "text":
+        # Extrae el numero de telefono del negocio
+        business_phone_number_id = (
+            request.json.get("entry", [{}])[0]
+            .get("changes", [{}])[0]
+            .get("value", {})
+            .get("metadata", {})
+            .get("phone_number_id")
+        )
 
-    # Powered by Flask.
-    response.headers["X-Powered-By"] = os.environ.get('POWERED_BY')
-    return response
+        # Envia una respuesta
+        response_data = {
+            "messaging_product": "whatsapp",
+            "to": message.get("from"),
+            "text": {"body": "Echo: " + message["text"]["body"]},
+            "context": {"message_id": message["id"]},
+        }
+        headers = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 
+        # Envia el mensaje de respuesta
+        requests.post(
+            "https://graph.facebook.com/v18.0/{}/messages".format(business_phone_number_id),
+            headers=headers,
+            json=response_data,
+        )
 
-@app.route('/')
-def homepage():
-    """Displays the homepage."""
-    return render_template('index.html')
+        # Marca el mensaje como leido
+        mark_read_data = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message["id"],
+        }
+        requests.post(
+            "https://graph.facebook.com/v18.0/{}/messages".format(business_phone_number_id),
+            headers=headers,
+            json=mark_read_data,
+        )
 
+    return jsonify({}), 200
 
-@app.route('/dreams', methods=['GET', 'POST'])
-def dreams():
-    """Simple API endpoint for dreams.
-    In memory, ephemeral, like real dreams.
-    """
+@app.route("/webhook", methods=["GET"])
+def verify_webhook():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
 
-    # Add a dream to the in-memory database, if given.
-    if 'dream' in request.args:
-        DREAMS.append(request.args['dream'])
+    # Verificacion del webhook
+    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+        print("Webhook verified successfully!")
+        return challenge, 200
+    else:
+        return "Forbidden", 403
 
-    # Return the list of remembered dreams.
-    return jsonify(DREAMS)
+@app.route("/")
+def home():
+    return "<pre>Nothing to see here.\nCheckout README.md to start.</pre>", 200
 
-
-if __name__ == '__main__':
-    app.run()
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=PORT)
