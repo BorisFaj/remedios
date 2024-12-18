@@ -1,3 +1,9 @@
 requests
 Flask
 gunicorn
+python-dotenv
+pyngrok
+transformers
+accelerate
+torch
+ffmpeg-python
