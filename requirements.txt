@@ -7,3 +7,6 @@ transformers
 accelerate
 torch
 ffmpeg-python
+revocalize
+pydub
+bark

@@ -1,26 +1,22 @@
 import os
 import requests
 import json
-import torch
 
 from chat.gpt4all import ask
 
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from transcribe.whisper import *
+from audio.tts.facebook import *
+from transformers import VitsModel, AutoTokenizer
 from flask import Flask, request, jsonify
 from pyngrok import ngrok
 from dotenv import find_dotenv, load_dotenv
 
 ########## CONSTANTES ##########
-### Torch y Whisper
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
-torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+_PROCESSED_AUDIOS = []  # homemade_kafka =)
 
-model_id = "openai/whisper-large-v3-turbo"
-
-model = AutoModelForSpeechSeq2Seq.from_pretrained(
-    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
-)
-model.to(device)
+# tts
+tts_model = VitsModel.from_pretrained("facebook/mms-tts-spa")
+tts_tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-spa")
 
 ### Env
 env_file = find_dotenv(".env")
@@ -60,6 +56,9 @@ def get_phone_number() -> json:
 def extract_audio(message: dict):
     audio_id = message["audio"]["id"]
     mime_type = message["audio"]["mime_type"]
+
+    _PROCESSED_AUDIOS.append(audio_id)
+
     if "ogg" in mime_type:
         file_name = "test/media_file.ogg"
     else:
@@ -85,21 +84,83 @@ def extract_audio(message: dict):
 
     return transcribe(file_name)
 
-def transcribe(file_name: str):
-    processor = AutoProcessor.from_pretrained(model_id)
+def send_text_message(message, business_phone_number_id):
+    respuesta_chatgpt = ask(message["text"]["body"])
 
-    pipe = pipeline(
-        "automatic-speech-recognition",
-        model=model,
-        tokenizer=processor.tokenizer,
-        feature_extractor=processor.feature_extractor,
-        torch_dtype=torch_dtype,
-        device=device,
+    print(f"[DEBUG][GPT4ALL]: {respuesta_chatgpt}")
+    # respuesta_chatgpt = "recibido lokiii"
+
+    # Envia una respuesta
+    response_data = {
+        "messaging_product": "whatsapp",
+        "to": message.get("from"),
+        "text": {"body": respuesta_chatgpt},
+        "context": {"message_id": message["id"]},
+    }
+
+    # Envia el mensaje de respuesta
+    requests.post(
+        "{}/{}/messages".format(__URL, business_phone_number_id),
+        headers=__HEADERS,
+        json=response_data,
     )
 
-    result = pipe(file_name, return_timestamps=True, generate_kwargs={"language": "spanish"})
-    print("[DEBUG] Transcripcion: {}".format(result["text"]))
-    return result["text"]
+    # Marca el mensaje como leido
+    mark_read_data = {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": message["id"],
+    }
+    requests.post(
+        "{}/{}/messages".format(__URL, business_phone_number_id),
+        headers=__HEADERS,
+        json=mark_read_data,
+    )
+
+def send_audio_message(message, business_phone_number_id):
+    # Transcribir audio
+    _pregunta = extract_audio(message)
+    # Preguntar LLM
+    respuesta_chatgpt = ask(_pregunta)
+
+    # TTS
+    _audio = generate_audio(respuesta_chatgpt)
+    # Subir el audio a meta
+    payload = {
+        "file": _audio,
+        "type": "MP3",
+        "messaging_product": "whatsapp"
+    }
+    media_response = requests.post(
+        "{}/{}/media".format(__URL, business_phone_number_id),
+        headers=__HEADERS,
+        data=_audio,
+        params=payload,
+    )
+
+    if media_response.status_code == 200:
+        print("[DEBUG]: Mensaje subido :)")
+        # Enviar post para actualizar
+        _body = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": "<WHATSAPP_USER_PHONE_NUMBER>",
+            "type": "audio",
+            "audio": {
+                "id": "{}".format(media_response.content)
+            }
+        }
+
+        requests.post(
+            "{}/{}/messages".format(__URL, business_phone_number_id),
+            headers=__HEADERS,
+            json=_body,
+        )
+
+        print("[DEBUG]: Mensaje enviado")
+    else:
+        # print(f"[ERROR]: {media_response.status_code} - {media_response.content}")
+        print(f"[ERROR]: {media_response.status_code}")
 
 
 @app.route("/webhook", methods=["POST"])
@@ -113,45 +174,18 @@ def webhook():
     business_phone_number_id = get_phone_number()
 
     if message:
+        print("[DEBUG] Ha entrao otro")
         if message.get("type") == "text":
-            _pregunta = message["text"]["body"]
-            respuesta_chatgpt = ask(_pregunta)
+
+            send_text_message(message, business_phone_number_id)
+
         elif message.get("type") == "audio":
-            _pregunta = extract_audio(message)
-            respuesta_chatgpt = ask(_pregunta)
+            if message["audio"]["id"] not in _PROCESSED_AUDIOS:
+                send_audio_message(message, business_phone_number_id)
+            else:
+                print(f"[DEBUG]: {business_phone_number_id} esta impaciente, que se espere")
         else:
-            respuesta_chatgpt = "qué me estás contando?"  # error
-
-
-        print(f"[DEBUG][GPT4ALL]: {respuesta_chatgpt}")
-        # respuesta_chatgpt = "recibido lokiii"
-
-        # Envia una respuesta
-        response_data = {
-            "messaging_product": "whatsapp",
-            "to": message.get("from"),
-            "text": {"body": respuesta_chatgpt},
-            "context": {"message_id": message["id"]},
-        }
-
-        # Envia el mensaje de respuesta
-        requests.post(
-            "{}/{}/messages".format(__URL, business_phone_number_id),
-            headers=__HEADERS,
-            json=response_data,
-        )
-
-        # Marca el mensaje como leido
-        mark_read_data = {
-            "messaging_product": "whatsapp",
-            "status": "read",
-            "message_id": message["id"],
-        }
-        requests.post(
-            "{}/{}/messages".format(__URL, business_phone_number_id),
-            headers=__HEADERS,
-            json=mark_read_data,
-        )
+            return jsonify({}), 404
 
     return jsonify({}), 200
 
@@ -173,7 +207,6 @@ def home():
     return "¡Hola, mundo! Este es un servicio Flask expuesto con ngrok.", 200
 
 if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=PORT)
     # Inicia ngrok y expone el servicio
     public_url = ngrok.connect(name="remedios")
     print(f"El servicio está disponible en: {public_url}")
