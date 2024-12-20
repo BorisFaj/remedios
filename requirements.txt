@@ -1,6 +1,5 @@
 requests
 Flask
-gunicorn
 python-dotenv
 pyngrok
 transformers
@@ -10,3 +9,4 @@ ffmpeg-python
 revocalize
 pydub
 bark
+scipy

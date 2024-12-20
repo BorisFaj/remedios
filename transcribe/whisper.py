@@ -14,7 +14,7 @@ whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
 
 whisper_model.to(device)
 
-def transcribe(file_name: str):
+def transcribe(file_name) -> str:
     processor = AutoProcessor.from_pretrained(whisper_model_id)
 
     pipe = pipeline(
@@ -27,5 +27,4 @@ def transcribe(file_name: str):
     )
 
     result = pipe(file_name, return_timestamps=True, generate_kwargs={"language": "spanish"})
-    print("[DEBUG] Transcripcion: {}".format(result["text"]))
     return result["text"]
