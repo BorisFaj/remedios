@@ -5,7 +5,7 @@ import requests
 import json
 import logging
 from dotenv import find_dotenv, load_dotenv
-from chat.gpt4all import ask
+from chat.tiny_llama import ask
 
 from transcribe.whisper import *
 from audio.tts.facebook import *
