@@ -10,3 +10,4 @@ revocalize
 pydub
 bark
 scipy
+confluent-kafka
