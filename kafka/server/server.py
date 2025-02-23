@@ -3,12 +3,9 @@ from confluent_kafka import Producer
 import json
 import socket
 import os
-from dotenv import load_dotenv
-
-load_dotenv(".secrets")
 
 # Configuración de Kafka
-KAFKA_BROKER = os.environ.get("PUBLIC_IP") + ":9092"
+KAFKA_BROKER = "kafka:9092"
 TOPIC = "whatsapp-events"
 
 # Configurar el productor de Kafka

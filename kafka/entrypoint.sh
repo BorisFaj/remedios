@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# En principio era un entry_point, ahora es mas bien una chuleta pero no la voy a borrar aun
 # Variables
 
 echo "🚀 Actualizando el sistema..."

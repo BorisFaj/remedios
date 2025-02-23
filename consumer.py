@@ -24,7 +24,7 @@ dictConfig({
 logger = logging.getLogger()
 
 conf = {
-    'bootstrap.servers': 'remediosapi.duckdns.org:9092',
+    'bootstrap.servers': 'remediosapi.duckdns.org:9093',
     'group.id': 'whatsapp-group',
     'auto.offset.reset': 'earliest',
     #'debug': 'consumer,cgrp,broker,topic'
