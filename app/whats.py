@@ -1,37 +1,42 @@
 import io
 from io import BytesIO
 
-import flask
 import requests
 import json
 import logging
-
-import server
-from chat.gpt4all import ask
+from dotenv import find_dotenv, load_dotenv
+#from chat.tiny_llama import ask
+#from chat.gpt4all import ask
+from chat.fool import ask
 
 from transcribe.whisper import *
 from audio.tts.facebook import *
 
+import os
+
 # Variables de entorno
-GRAPH_API_TOKEN = server.GRAPH_API_TOKEN
-GRAPH_URL = server.GRAPH_URL
+env_file = find_dotenv(".env")
+load_dotenv(env_file)
+GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
+GRAPH_URL = os.environ.get("GRAPH_URL")
 
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
-_PROCESSED_AUDIOS = []  # homemade kafka =)
+
 
 logger = logging.getLogger()
 
-def get_message(request: flask.request) -> json:
-    return(
-        request.json.get("entry", [{}])[0]
+def get_message(request: dict) -> dict:
+    return (
+        request.get("entry", [{}])[0]
         .get("changes", [{}])[0]
         .get("value", {})
         .get("messages", [{}])[0]
     )
 
-def get_phone_number(request: flask.request) -> int:
+
+def get_phone_number(request: dict) -> int:
     return (
-        request.json.get("entry", [{}])[0]
+        request.get("entry", [{}])[0]
         .get("changes", [{}])[0]
         .get("value", {})
         .get("metadata", {})
@@ -40,6 +45,7 @@ def get_phone_number(request: flask.request) -> int:
 
 
 def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -> None:
+
     # Envia una respuesta
     response_data = {
         "messaging_product": "whatsapp",
@@ -50,9 +56,9 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
 
     # Envia el mensaje de respuesta
     requests.post(
-        "{}/{}/messages".format(GRAPH_URL, phone_number),
-        headers=__HEADERS,
-        json=response_data,
+         "{}/{}/messages".format(GRAPH_URL, phone_number),
+         headers=__HEADERS,
+         json=response_data,
     )
 
     # Marca el mensaje como leido
@@ -67,16 +73,9 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
         json=mark_read_data,
     )
 
-def validate_audio_id(business_phone_number_id: int, audio_id: int):
-    if audio_id in _PROCESSED_AUDIOS:
-        logger.warning(f"{business_phone_number_id} esta impaciente, que se espere")
-        return ""
-
 def extract_audio(message: dict, phone_number: int) -> BytesIO:
     audio_id = message["audio"]["id"]
     # mime_type = message["audio"]["mime_type"]
-
-    validate_audio_id(phone_number, audio_id)
 
     logger.debug(f"buscando audio {audio_id}...")
     response_url = requests.get("{}/{}".format(GRAPH_URL, audio_id), headers=__HEADERS)
@@ -96,8 +95,6 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
     else:
         logger.error("URL no recibida :(")
         return io.BytesIO()
-
-    _PROCESSED_AUDIOS.append(audio_id)  # Toodo OK
 
     return audio_file
 

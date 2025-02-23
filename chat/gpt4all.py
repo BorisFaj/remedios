@@ -6,7 +6,7 @@ def ask(m: str):
 
     url = "http://localhost:4891/v1/chat/completions"
     data = {
-        "model": "Phi-3 Mini Instruct",
+        "model": "Llama 3.2 8B Instruct",
         "messages": [{"role": "user", "content": m}],
         "max_tokens": 4096,  # lo mismo que el ChatGPT
         "temperature": 0.28
