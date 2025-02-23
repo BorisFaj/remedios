@@ -1,0 +1,47 @@
+frases_motivacionales = [
+    "Cada día es una nueva oportunidad.",
+    "Lo único imposible es aquello que no intentas.",
+    "El éxito comienza con un solo paso.",
+    "No cuentes los días, haz que los días cuenten.",
+    "Cree en ti y todo será posible.",
+    "Tu actitud determina tu dirección.",
+    "Haz hoy lo que tu futuro agradecerá.",
+    "El único límite es tu mente.",
+    "Pequeños progresos diarios llevan a grandes resultados.",
+    "La disciplina supera al talento cuando el talento no se disciplina.",
+    "Si puedes soñarlo, puedes hacerlo.",
+    "Los errores son pruebas de que lo estás intentando.",
+    "Nunca es tarde para ser quien quieres ser.",
+    "Hazlo con pasión o no lo hagas.",
+    "No dejes que el miedo decida por ti.",
+    "Siempre parece imposible hasta que se hace.",
+    "Lo mejor está por venir.",
+    "Las oportunidades no ocurren, las creas.",
+    "Sigue adelante, incluso cuando sea difícil.",
+    "Lo que haces hoy puede mejorar todos tus mañanas.",
+    "Tu única competencia eres tú mismo.",
+    "No tienes que ser grande para empezar, pero tienes que empezar para ser grande.",
+    "Rodéate de quienes saquen lo mejor de ti.",
+    "No mires atrás, vas en la dirección correcta.",
+    "Hazlo con miedo, pero hazlo.",
+    "Cada obstáculo es una oportunidad disfrazada.",
+    "Transforma los problemas en desafíos.",
+    "La constancia es la clave del éxito.",
+    "Sé la mejor versión de ti mismo.",
+    "El éxito es la suma de pequeños esfuerzos repetidos.",
+    "Cambia tus pensamientos y cambiarás tu mundo.",
+    "No esperes a que pase la tormenta, aprende a bailar bajo la lluvia.",
+    "El esfuerzo de hoy es el éxito de mañana.",
+    "No es suerte, es trabajo y perseverancia.",
+    "Nada cambia si no cambias algo.",
+    "Sueña en grande, trabaja duro, mantente humilde.",
+    "Nunca subestimes tu capacidad de mejorar.",
+    "Lo que piensas, lo creas.",
+    "El verdadero fracaso es no intentarlo.",
+    "Aprovecha cada segundo, porque el tiempo no vuelve."
+]
+
+import random
+
+def ask(m: str):
+    return random.choice(frases_motivacionales)

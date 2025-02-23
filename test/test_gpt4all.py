@@ -1,14 +1,16 @@
-import requests
+from gpt4all import GPT4All
 
-url = "http://localhost:4891/v1/chat/completions"
-data = {
-    "model": "Phi-3 Mini Instruct",
-    "messages": [{"role": "user", "content": "Who is Lionel Messi?"}],
-    "max_tokens": 50,
-    "temperature": 0.28
-}
+# Ver lista de modelos disponibles
+print(GPT4All.list_models())
 
-response = requests.post(url, json=data)
+# Nombre del modelo que se descargará automáticamente
+model_name = "ggml-llama-3.2-8b-instruct"
 
-print(response.status_code)
-print(response.text)
+gpt = GPT4All(model_name)
+print("Modelo descargado correctamente")
+
+model_path = "/home/ubuntu/models/ggml-llama-3.2-8b-instruct.bin"
+gpt = GPT4All(model_path)
+
+response = gpt.generate("Hola, ¿cómo estás?", max_tokens=100)
+print(response)

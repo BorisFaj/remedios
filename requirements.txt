@@ -10,3 +10,5 @@ revocalize
 pydub
 bark
 scipy
+confluent-kafka
+gpt4all
