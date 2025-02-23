@@ -44,4 +44,4 @@ frases_motivacionales = [
 import random
 
 def ask(m: str):
-    random.choice(frases_motivacionales)
+    return random.choice(frases_motivacionales)
