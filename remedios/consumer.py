@@ -3,7 +3,7 @@ import logging
 from logging.config import dictConfig
 from confluent_kafka import Consumer
 
-import remedios
+from remedios import remedios
 
 dictConfig({
     'version': 1,
