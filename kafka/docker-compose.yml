@@ -36,6 +36,9 @@ services:
        - kafka
     environment:
       - KAFKA_BROKER=kafka:9092  # Kafka está en la misma red
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=eu-north-1
     ports:
       - "3000:3000"
     networks:
