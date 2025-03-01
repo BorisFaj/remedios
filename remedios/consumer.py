@@ -3,25 +3,7 @@ import logging
 from logging.config import dictConfig
 from confluent_kafka import Consumer
 
-from remedios import remedios
-
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://flask.logging.wsgi_errors_stream',
-        'formatter': 'default'
-    }},
-    'root': {
-        'level': 'INFO',
-        'handlers': ['wsgi']
-    }
-})
-
-logger = logging.getLogger()
+import remedios
 
 conf = {
     'bootstrap.servers': 'remediosapi.duckdns.org:9093',
@@ -32,6 +14,7 @@ conf = {
 
 consumer = Consumer(conf)
 consumer.subscribe(['whatsapp-events'])
+print("Suscrito al topic")
 
 while True:
     msg = consumer.poll(1.0)
