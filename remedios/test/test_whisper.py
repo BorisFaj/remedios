@@ -24,7 +24,7 @@ pipe = pipeline(
 )
 
 dataset = load_dataset("distil-whisper/librispeech_long", "clean", split="validation")
-# sample = dataset[0]["stt"]
+# sample = dataset[0]["audio"]
 
 with open("media_file.ogg", "br") as file:
     _audio = file.read()

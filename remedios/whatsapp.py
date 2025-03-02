@@ -75,10 +75,10 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
     )
 
 def extract_audio(message: dict, phone_number: int) -> BytesIO:
-    audio_id = message["stt"]["id"]
-    # mime_type = message["stt"]["mime_type"]
+    audio_id = message["audio"]["id"]
+    # mime_type = message["audio"]["mime_type"]
 
-    logger.debug(f"buscando stt {audio_id}...")
+    logger.debug(f"buscando audio {audio_id}...")
     response_url = requests.get("{}/{}".format(GRAPH_URL, audio_id), headers=__HEADERS)
 
     # Verifica si la solicitud fue exitosa
@@ -100,16 +100,16 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
     return audio_file
 
 # def send_audio_answer(message: dict, phone_number) -> None:
-#     # Transcribir stt
+#     # Transcribir audio
 #     audio = extract_audio(message, phone_number)
 #     _pregunta = transcribe(audio)
 #
 #     # Preguntar LLM
 #     respuesta_chatgpt = ask(_pregunta)
 #
-#     # TTS
+#     # Audio
 #     _audio = generate_audio(respuesta_chatgpt)
-#     # Subir el stt a meta
+#     # Subir el audio a meta
 #     payload = {
 #         "file": _audio,
 #         "type": "MP3",
@@ -129,8 +129,8 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
 #             "messaging_product": "whatsapp",
 #             "recipient_type": "individual",
 #             "to": "<WHATSAPP_USER_PHONE_NUMBER>",
-#             "type": "stt",
-#             "stt": {
+#             "type": "audio",
+#             "audio": {
 #                 "id": "{}".format(media_response.content)
 #             }
 #         }
@@ -141,6 +141,6 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
 #             json=_body,
 #         )
 #
-#         logger.info("Mensaje de stt enviado")
+#         logger.info("Mensaje de audio enviado")
 #     else:
 #         logger.error(f"{media_response.status_code} - {media_response.content}")
