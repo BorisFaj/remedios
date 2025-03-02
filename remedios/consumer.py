@@ -1,9 +1,18 @@
 import json
-import logging
-from logging.config import dictConfig
 from confluent_kafka import Consumer
+import reme
+import logging
+import sys
 
-import remedios
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # Enviar logs a stdout para que Docker los capture
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 conf = {
     'bootstrap.servers': 'remediosapi.duckdns.org:9093',
@@ -12,16 +21,17 @@ conf = {
     #'debug': 'consumer,cgrp,broker,topic'
 }
 
+TOPIC = "whatsapp-events"
 consumer = Consumer(conf)
-consumer.subscribe(['whatsapp-events'])
-print("Suscrito al topic")
+consumer.subscribe([TOPIC])
+logger.info(f"Suscrito al topic {TOPIC}")
 
 while True:
     msg = consumer.poll(1.0)
     if msg is None:
         continue
     if msg.error():
-        print(f"❌ Error: {msg.error()}")
+        logger.error(f"❌ Error: {msg.error()}")
         continue
 
     # Decodificar el mensaje de Kafka
@@ -29,11 +39,11 @@ while True:
 
     # Si el mensaje no es un JSON válido, ignorarlo
     if not message_str.startswith("{"):
-        print(f"⚠️ Mensaje ignorado (no es JSON): {message_str}")
+        logger.warning(f"⚠️ Mensaje ignorado (no es JSON): {message_str}")
         continue
 
     # Convertir el mensaje en JSON
     message_data = json.loads(message_str)
-    print(f"📩 Mensaje recibido: {json.dumps(message_data, indent=2)}")
+    logger.info(f"📩 Mensaje recibido: {json.dumps(message_data, indent=2)}")
 
-    remedios.run(message_data)
+    reme.run(message_data)

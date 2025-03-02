@@ -48,7 +48,7 @@ volver a lanzar el servidor
 
 ```bash
 pkill gunicorn
-gunicorn -w 4 -b 0.0.0.0:3000 server:app --daemon
+gunicorn -w 4 -b 0.0.0.0:3000 server:interface --daemon
 ```
 
 Probar Flask
@@ -164,7 +164,7 @@ graph TD
 
 4. Inicia el servidor Flask:
    ```bash
-   python app.py
+   python interface.py
    ```
 
 ## Uso
