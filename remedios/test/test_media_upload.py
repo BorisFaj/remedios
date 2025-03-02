@@ -17,7 +17,7 @@ __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 with open("converted.mp3", 'rb') as file:
     # Crear el payload con el archivo
     payload = {
-        "type": "stt",
+        "type": "audio",
         "messaging_product": "whatsapp",
         "file": file
     }
@@ -33,7 +33,7 @@ with open("converted.mp3", 'rb') as file:
 
 # Crear el payload con el archivo
 # payload = {
-#     "type": "stt",
+#     "type": "audio",
 #     "messaging_product": "whatsapp",
 #     "file": _mp3_file
 # }

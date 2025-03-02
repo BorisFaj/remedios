@@ -32,8 +32,10 @@ def run(request: dict):
             send_text_answer(respuesta_chatgpt, message["from"], message["id"], phone_number)
 
             logger.debug("Text answer send ;)")
-        elif message.get("type") == "stt":
+        elif message.get("type") == "audio":
+            logger.info("Extrayendo audio...")
             audio = extract_audio(message, phone_number)
+            logger.info("Audio extraido.")
             # _pregunta = whats.transcribe(stt)
             # answer = whats.ask(_pregunta)
             # whats.send_text_answer(answer, message["from"], message["id"], phone_number)
