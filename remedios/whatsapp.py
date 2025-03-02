@@ -3,27 +3,28 @@ from io import BytesIO
 
 import requests
 import json
-import logging
 from dotenv import find_dotenv, load_dotenv
-#from chat.tiny_llama import ask
-#from chat.gpt4all import ask
-from chat.fool import ask
-
-from transcribe.whisper import *
-from audio.tts.facebook import *
-
 import os
+import logging
+import sys
 
-# Variables de entorno
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # Enviar logs a stdout para que Docker los capture
+    ],
+)
+
+logger = logging.getLogger(__name__)
+
 env_file = find_dotenv(".env")
 load_dotenv(env_file)
+
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
-
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 
-
-logger = logging.getLogger()
 
 def get_message(request: dict) -> dict:
     return (
@@ -98,48 +99,48 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
 
     return audio_file
 
-def send_audio_answer(message: dict, phone_number) -> None:
-    # Transcribir audio
-    audio = extract_audio(message, phone_number)
-    _pregunta = transcribe(audio)
-
-    # Preguntar LLM
-    respuesta_chatgpt = ask(_pregunta)
-
-    # TTS
-    _audio = generate_audio(respuesta_chatgpt)
-    # Subir el audio a meta
-    payload = {
-        "file": _audio,
-        "type": "MP3",
-        "messaging_product": "whatsapp"
-    }
-    media_response = requests.post(
-        "{}/{}/media".format(GRAPH_URL, phone_number),
-        headers=__HEADERS,
-        data=_audio,
-        params=payload,
-    )
-
-    if media_response.status_code == 200:
-        logger.debug("Mensaje subido :)")
-        # Enviar post para actualizar
-        _body = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": "<WHATSAPP_USER_PHONE_NUMBER>",
-            "type": "audio",
-            "audio": {
-                "id": "{}".format(media_response.content)
-            }
-        }
-
-        requests.post(
-            "{}/{}/messages".format(GRAPH_URL, phone_number),
-            headers=__HEADERS,
-            json=_body,
-        )
-
-        logger.info("Mensaje de audio enviado")
-    else:
-        logger.error(f"{media_response.status_code} - {media_response.content}")
+# def send_audio_answer(message: dict, phone_number) -> None:
+#     # Transcribir audio
+#     audio = extract_audio(message, phone_number)
+#     _pregunta = transcribe(audio)
+#
+#     # Preguntar LLM
+#     respuesta_chatgpt = ask(_pregunta)
+#
+#     # Audio
+#     _audio = generate_audio(respuesta_chatgpt)
+#     # Subir el audio a meta
+#     payload = {
+#         "file": _audio,
+#         "type": "MP3",
+#         "messaging_product": "whatsapp"
+#     }
+#     media_response = requests.post(
+#         "{}/{}/media".format(GRAPH_URL, phone_number),
+#         headers=__HEADERS,
+#         data=_audio,
+#         params=payload,
+#     )
+#
+#     if media_response.status_code == 200:
+#         logger.debug("Mensaje subido :)")
+#         # Enviar post para actualizar
+#         _body = {
+#             "messaging_product": "whatsapp",
+#             "recipient_type": "individual",
+#             "to": "<WHATSAPP_USER_PHONE_NUMBER>",
+#             "type": "audio",
+#             "audio": {
+#                 "id": "{}".format(media_response.content)
+#             }
+#         }
+#
+#         requests.post(
+#             "{}/{}/messages".format(GRAPH_URL, phone_number),
+#             headers=__HEADERS,
+#             json=_body,
+#         )
+#
+#         logger.info("Mensaje de audio enviado")
+#     else:
+#         logger.error(f"{media_response.status_code} - {media_response.content}")
