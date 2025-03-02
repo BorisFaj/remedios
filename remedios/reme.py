@@ -1,18 +1,21 @@
 from whatsapp import get_message, get_phone_number, send_text_answer, extract_audio
 from stt.whisper import transcribe
 from chat.fool import ask
+from log.sender import save_message
 import logging
 import sys
+from dotenv import load_dotenv, find_dotenv
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.StreamHandler(sys.stdout)  # Enviar logs a stdout para que Docker los capture
+        logging.StreamHandler(sys.stdout)
     ],
 )
-
 logger = logging.getLogger(__name__)
+
+load_dotenv(find_dotenv(".env"))
 
 def run(request: dict):
     logger.info("Incoming webhook message")
@@ -24,24 +27,25 @@ def run(request: dict):
         if message.get("type") == "text":
             _message_body = message['text']['body']
             respuesta_chatgpt = ask(_message_body)
-            # respuesta_chatgpt = "recibido lokiii"
 
             logger.info(f"[HUMAN]: {_message_body}")
             logger.info(f"[IA-Chat]: {respuesta_chatgpt}")
 
             send_text_answer(respuesta_chatgpt, message["from"], message["id"], phone_number)
+            save_message(message["from"], "IA", _message_body, "text")
+            save_message("IA", message["from"], respuesta_chatgpt, "text")
 
-            logger.debug("Text answer send ;)")
+            logger.debug("Text answer sent ;)")
         elif message.get("type") == "audio":
             logger.info("Extrayendo audio...")
             audio = extract_audio(message, phone_number)
-            logger.info("Audio extraido.")
-            # _pregunta = whats.transcribe(stt)
-            # answer = whats.ask(_pregunta)
-            # whats.send_text_answer(answer, message["from"], message["id"], phone_number)
-            # whats.send_audio_answer(answer, phone_number)
+            logger.info("Audio extraído.")
+
             transcription = transcribe(audio)
             logger.info(f"[IA-Transcription]: {transcription}")
+
             send_text_answer(transcription, message["from"], message["id"], phone_number)
+            save_message(message["from"], "IA", transcription, "audio")
+
         else:
             logger.debug("pos na")
