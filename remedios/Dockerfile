@@ -33,7 +33,7 @@ COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 
 # Dependencias remedios ANTES que torch
 RUN $POETRY_VENV/bin/pip install transformers==4.49.0 accelerate==0.27.2
-RUN $POETRY_VENV/bin/pip install confluent_kafka accelerate bark scipy pydub dotenv psycopg2-binary
+RUN $POETRY_VENV/bin/pip install confluent_kafka accelerate bark scipy pydub dotenv psycopg2-binary gpt4all
 RUN $POETRY_VENV/bin/pip install torch==2.6.0+cu126 torchaudio==2.6.0+cu126 --index-url https://download.pytorch.org/whl/cu126
 
 CMD ["/remedios/.venv/bin/python", "-m", "consumer"]

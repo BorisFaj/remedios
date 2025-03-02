@@ -1,6 +1,6 @@
 from whatsapp import get_message, get_phone_number, send_text_answer, extract_audio
 from stt.whisper import transcribe
-from chat.fool import ask
+from chat.gpt4all import ask
 from log.sender import save_message
 import logging
 import sys
@@ -26,7 +26,7 @@ def run(request: dict):
     if message:
         if message.get("type") == "text":
             _message_body = message['text']['body']
-            respuesta_chatgpt = ask(_message_body)
+            respuesta_chatgpt = ask(_message_body, message["from"])
 
             logger.info(f"[HUMAN]: {_message_body}")
             logger.info(f"[IA-Chat]: {respuesta_chatgpt}")
