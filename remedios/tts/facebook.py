@@ -1,11 +1,10 @@
 from transformers import VitsModel, AutoTokenizer
 import torch
 import numpy as np
-from audio.utils import wav_2_mp3
+from remedios.tts.utils import wav_2_mp3
 
-
-model = VitsModel.from_pretrained("facebook/mms-tts-spa")
-tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-spa")
+model = VitsModel.from_pretrained("facebook/mms-stt-spa")
+tokenizer = AutoTokenizer.from_pretrained("facebook/mms-stt-spa")
 
 def generate_audio(text):
 
