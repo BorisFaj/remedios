@@ -14,8 +14,8 @@ def wav_2_mp3(wav):
         return  np.array(AudioSegment.from_file_using_temporary_files(inmemoryfile) .get_array_of_samples())
 
 
-model = VitsModel.from_pretrained("facebook/mms-tts-spa")
-tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-spa")
+model = VitsModel.from_pretrained("facebook/mms-stt-spa")
+tokenizer = AutoTokenizer.from_pretrained("facebook/mms-stt-spa")
 
 text = "some example text in the Spanish language"
 inputs = tokenizer(text, return_tensors="pt")
