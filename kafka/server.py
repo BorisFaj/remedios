@@ -1,12 +1,16 @@
 from flask import Flask, request, jsonify
-from confluent_kafka import Producer
-import json
 import socket
-import os
+from kafka import KafkaProducer
+import json
 import boto3
 import time
 import sys
 import logging
+from dotenv import load_dotenv, find_dotenv
+import os
+
+
+load_dotenv(find_dotenv(".env"))
 
 # Forzar que los prints se muestren inmediatamente en los logs de Docker
 sys.stdout.reconfigure(line_buffering=True)
@@ -15,15 +19,25 @@ sys.stdout.reconfigure(line_buffering=True)
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 # Configuración de Kafka
-KAFKA_BROKER = "kafka:9092"
-TOPIC = "whatsapp-events"
 
-# Configurar el productor de Kafka
-producer_conf = {
-    "bootstrap.servers": KAFKA_BROKER,
-    "client.id": socket.gethostname(),
-}
-producer = Producer(producer_conf)
+
+producer = KafkaProducer(
+  bootstrap_servers=os.environ.get("BOOTSTRAP_SERVER"),
+  security_protocol="SASL_SSL",
+  sasl_mechanism="SCRAM-SHA-256",
+  sasl_plain_username=os.environ.get("REDPANDA_USER"),
+  sasl_plain_password=os.environ.get("REDPANDA_PASS"),
+)
+TOPIC = os.environ.get("KAFKA_TOPIC")
+hostname = str.encode(socket.gethostname())
+
+
+def on_success(metadata):
+  print(f"Sent to topic '{metadata.topic}' at offset {metadata.offset}")
+
+def on_error(e):
+  print(f"Error sending message: {e}")
+
 
 ## Funciones para AWS
 AWS_REGION = "eu-north-1"
@@ -102,9 +116,17 @@ def webhook():
 
             print("Mensaje recibido:", json.dumps(data, indent=2))
 
-            # Enviar el mensaje a Kafka
-            producer.produce(TOPIC, json.dumps(data))
+            N = 1  # ToDo: se pueden encolar N mensajes de manera asincrona, de momento solo necesito 1
+            for i in range(N):
+                future = producer.send(
+                    TOPIC,
+                    key=hostname,
+                    value=str.encode(json.dumps(data))
+                )
+                future.add_callback(on_success)
+                future.add_errback(on_error)
             producer.flush()
+            producer.close()
 
             # Enviar metricas
             enviar_metricas()
