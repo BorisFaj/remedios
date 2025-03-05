@@ -11,3 +11,4 @@ bark~=0.1.5
 scipy~=1.15.2
 pydub~=0.25.1
 psycopg2-binary
+llama-cpp-python[cuda]
