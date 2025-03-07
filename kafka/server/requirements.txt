@@ -1,3 +1,0 @@
-flask
-confluent-kafka
-boto3
