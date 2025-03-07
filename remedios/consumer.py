@@ -1,8 +1,9 @@
 import json
-from confluent_kafka import Consumer
+from kafka import KafkaConsumer
 import reme
 import logging
 import sys
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,36 +15,24 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-conf = {
-    'bootstrap.servers': 'remediosapi.duckdns.org:9093',
-    'group.id': 'whatsapp-group',
-    'auto.offset.reset': 'earliest',
-    #'debug': 'consumer,cgrp,broker,topic'
-}
+consumer = KafkaConsumer(
+  bootstrap_servers=os.environ.get("BOOTSTRAP_SERVER"),
+  security_protocol="SASL_SSL",
+  sasl_mechanism="SCRAM-SHA-256",
+  sasl_plain_username=os.environ.get("REDPANDA_USER"),
+  sasl_plain_password=os.environ.get("REDPANDA_PASS"),
+  auto_offset_reset="earliest",
+  enable_auto_commit=False,
+  consumer_timeout_ms=10000
+)
+consumer.subscribe(os.environ.get("KAFKA_TOPIC"))
 
-TOPIC = "whatsapp-events"
-consumer = Consumer(conf)
-consumer.subscribe([TOPIC])
-logger.info(f"Suscrito al topic {TOPIC}")
+for message in consumer:
+  topic_info = f"topic: {message.topic} ({message.partition}|{message.offset})"
+  message_info = f"key: {message.key}, {message.value}"
+  print(f"{topic_info}, {message_info}")
 
-while True:
-    msg = consumer.poll(1.0)
-    if msg is None:
-        continue
-    if msg.error():
-        logger.error(f"❌ Error: {msg.error()}")
-        continue
+  message_data = json.loads(message.value)
+  logger.info(f"📩 Mensaje recibido: {json.dumps(message_data, indent=2)}")
 
-    # Decodificar el mensaje de Kafka
-    message_str = msg.value().decode('utf-8').strip()  # Evitar espacios en blanco
-
-    # Si el mensaje no es un JSON válido, ignorarlo
-    if not message_str.startswith("{"):
-        logger.warning(f"⚠️ Mensaje ignorado (no es JSON): {message_str}")
-        continue
-
-    # Convertir el mensaje en JSON
-    message_data = json.loads(message_str)
-    logger.info(f"📩 Mensaje recibido: {json.dumps(message_data, indent=2)}")
-
-    reme.run(message_data)
+  reme.run(message_data)
