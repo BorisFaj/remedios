@@ -1,0 +1,4 @@
+flask
+kafka-python
+boto3
+dotenv
