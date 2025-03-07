@@ -30,28 +30,27 @@ cursor = DB_CONN.cursor()
 
 
 def save_message(sender, receiver, message, message_type="text"):
-    user_id = save_user(sender)  # Registrar el usuario si no existe
+    save_user(sender)  # Registrar el usuario si no existe
+    save_user(receiver)  # Registrar el receptor si no existe
 
     try:
         cursor.execute("""
-            INSERT INTO messages (sender, receiver, message, message_type, user_id) 
-            VALUES (%s, %s, %s, %s, %s)
-        """, (sender, receiver, message, message_type, user_id))
+            INSERT INTO messages (sender_phone, receiver_phone, message, message_type) 
+            VALUES (%s, %s, %s, %s)
+        """, (sender, receiver, message, message_type))
 
-        logger.info(f"Mensaje guardado en la base de datos ✅ Tipo: {message_type}")
+        logger.info(f"📩 Mensaje tipo {message_type} registrado en la base de datos ✅")
 
     except Exception as e:
-        logger.error(f"Error al insertar en la base de datos: {e}")
-
+        logger.error(f"❌ Error al insertar en la base de datos: {e}")
 
 def save_user(phone_number):
-    """Guarda el usuario si no existe y devuelve su ID."""
-    cursor.execute("SELECT id FROM users WHERE phone = %s", (phone_number,))
-    user = cursor.fetchone()
-
-    if not user:
-        cursor.execute("INSERT INTO users (phone) VALUES (%s) RETURNING id", (phone_number,))
-        user_id = cursor.fetchone()[0]
-        logger.info(f"Nuevo usuario registrado: {phone_number} (ID: {user_id})")
-        return user_id
-    return user[0]
+    """Guarda el usuario si no existe. No devuelve ID porque ahora usamos phone."""
+    try:
+        cursor.execute("""
+            INSERT INTO users (phone) VALUES (%s) 
+            ON CONFLICT (phone) DO NOTHING
+        """, (phone_number,))
+        logger.info(f"Usuario registrado o ya existente: {phone_number}")
+    except Exception as e:
+        logger.error(f"❌ Error al guardar usuario {phone_number}: {e}")

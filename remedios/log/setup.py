@@ -15,6 +15,7 @@ DB_CONN = psycopg2.connect(
 DB_CONN.autocommit = True
 cursor = DB_CONN.cursor()
 
+# Tabla de usuarios
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -24,19 +25,21 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """)
 
+# Tabla de mensajes con claves foráneas a users.phone
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
-    sender VARCHAR(255) NOT NULL,
-    receiver VARCHAR(255) NOT NULL,
+    sender_phone VARCHAR(20) NOT NULL,
+    receiver_phone VARCHAR(20) NOT NULL,
     message TEXT NOT NULL,
     message_type VARCHAR(50) NOT NULL DEFAULT 'text',
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    user_id INT,
-    CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    CONSTRAINT fk_sender FOREIGN KEY (sender_phone) REFERENCES users(phone) ON DELETE SET NULL,
+    CONSTRAINT fk_receiver FOREIGN KEY (receiver_phone) REFERENCES users(phone) ON DELETE SET NULL
 );
 """)
 
+# Tabla de logs
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS logs (
     id SERIAL PRIMARY KEY,

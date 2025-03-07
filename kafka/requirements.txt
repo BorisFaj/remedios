@@ -1,3 +1,4 @@
 flask
-confluent-kafka
+kafka-python
 boto3
+dotenv
