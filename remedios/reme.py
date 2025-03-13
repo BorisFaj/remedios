@@ -1,8 +1,8 @@
 from whatsapp import get_message, get_phone_number, send_text_answer, extract_audio
 from stt.whisper import transcribe
-# from chat.gpt4all import ask
-from chat.fool import ask
-from log.sender import save_message
+from chat.mistral import ask
+# from chat.fool import ask
+from log.sender import save_message, format_conversation_history
 import logging
 import sys
 from dotenv import load_dotenv, find_dotenv
@@ -27,8 +27,9 @@ def run(request: dict):
     if message:
         if message.get("type") == "text":
             _message_body = message['text']['body']
-            # respuesta_chatgpt = ask(_message_body, message["from"])
-            respuesta_chatgpt = ask(_message_body)
+            chat_history = format_conversation_history(message["from"], _message_body)
+            logger.info(f"history: {chat_history}")
+            respuesta_chatgpt = ask(chat_history)
 
             logger.info(f"[HUMAN]: {_message_body}")
             logger.info(f"[IA-Chat]: {respuesta_chatgpt}")
