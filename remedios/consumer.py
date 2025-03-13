@@ -1,6 +1,6 @@
 import json
 from kafka import KafkaConsumer
-import reme
+import remetext
 import logging
 import sys
 import os
@@ -56,7 +56,7 @@ def start_consumer():
                 message_data = json.loads(message.value)
                 logger.info(f"📩 Mensaje recibido: {json.dumps(message_data, indent=2)}")
 
-                reme.run(message_data)
+                remetext.run(message_data)
                 consumer.commit()
                 logger.info(f"✔ Mensaje confirmado en offset {message.offset}")
 
