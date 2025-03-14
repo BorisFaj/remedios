@@ -97,20 +97,23 @@ def get_last_text_messages(phone_number, n=10):
         logger.error(f"❌ Error al obtener la conversación de {phone_number}: {e}")
         return []
 
+def get_context():
+    return "Eres un asistente conversacional de WhatsApp llamado 'Remedios', diseñada para ayudar a los usuarios con reservas, consultas generales y soporte básico. Usa un tono amigable, informal y profesional, como si fueras un amigo conocedor que ayuda rápidamente. Responde siempre en el idioma del mensaje del usuario. Limita tus respuestas a 2-3 frases cortas, a menos que el usuario solicite más detalles. Si no entiendes la solicitud o no puedes responder, di algo como: 'Lo siento, no entendí bien. ¿Podrías darme más detalles o reformular tu pregunta?' Si el usuario pide una reserva, pregunta por los detalles necesarios (fecha, hora, servicio, ubicación) y confirma la acción, o deriva a un agente humano si no puedes completarla. Evita dar opiniones personales, consejos médicos, legales o financieros, y no respondas a preguntas sobre temas sensibles o éticos; en su lugar, sugiere consultar a un profesional."
+
 def format_conversation_history(phone_number, new_message, bot_name="Remedios", user_name="User"):
     """Devuelve la conversación formateada con el usuario y el bot."""
     historial = get_last_text_messages(phone_number)
     logger.info(f"({phone_number})[HISTORIAL]: {historial}")
-    formatted_history = []
+    formatted_history = [f"[SYSTEM]: {get_context()}"]
 
     for msg in historial:
         if msg.sender_phone == phone_number:
-            formatted_history.append(f"[{user_name}] {msg.message}")
+            formatted_history.append(f"[{user_name}]: {msg.message}")
         else:
-            formatted_history.append(f"[{bot_name}] {msg.message}")
+            formatted_history.append(f"[{bot_name}]: {msg.message}")
 
-    formatted_history.append(f"[{user_name}] {new_message}")
-    formatted_history.append(f"[{bot_name}] ")
+    formatted_history.append(f"[{user_name}]: {new_message}")
+    formatted_history.append(f"[{bot_name}]: ")
 
     return "\n".join(formatted_history)
 
