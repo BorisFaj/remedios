@@ -2,10 +2,8 @@ import os
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-from dotenv import find_dotenv, load_dotenv
 from transformers import BitsAndBytesConfig
 
-load_dotenv(find_dotenv(".env"))
 
 model_id = "mistralai/Mistral-Nemo-Instruct-2407"
 # model_id = "mistralai/Mistral-7B-Instruct-v0.3"

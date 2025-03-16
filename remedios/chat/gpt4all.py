@@ -5,9 +5,7 @@ import warnings
 import logging
 import sys
 import os
-from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv(".env"))
 
 logging.basicConfig(
     level=logging.INFO,

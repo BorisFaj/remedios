@@ -3,7 +3,6 @@ from chat.mistral import ask
 from log.sender import save_message, format_conversation_history
 import logging
 import sys
-from dotenv import load_dotenv, find_dotenv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +13,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv(find_dotenv(".env"))
 
 def run(request: dict):
     logger.info("Incoming webhook message")
