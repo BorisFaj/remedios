@@ -51,7 +51,7 @@ def start_consumer():
                 sasl_plain_password=os.environ.get("REDPANDA_PASS"),
                 auto_offset_reset="earliest",
                 enable_auto_commit=False,
-                group_id=os.environ.get("KAFKA_GROUP_ID", "patio")
+                group_id=os.environ.get("KAFKA_GROUP_ID", "default")
             )
 
             consumer.subscribe([KAFKA_TOPIC])

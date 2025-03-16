@@ -19,7 +19,7 @@ env_file = find_dotenv(".env")
 load_dotenv(env_file)
 
 # Configurar la conexión a la base de datos
-DATABASE_URL = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@golismeos.c5aqi48uyz13.eu-north-1.rds.amazonaws.com:5432/golismeos"
+DATABASE_URL = f"postgresql://{os.getenv('DB_URL')}"
 engine = create_engine(DATABASE_URL)
 
 # Crear sesión de base de datos
