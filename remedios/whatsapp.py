@@ -3,7 +3,6 @@ from io import BytesIO
 
 import requests
 import json
-from dotenv import find_dotenv, load_dotenv
 import os
 import logging
 import sys
@@ -17,9 +16,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-env_file = find_dotenv(".env")
-load_dotenv(env_file)
 
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
