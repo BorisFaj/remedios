@@ -2,7 +2,6 @@ import os
 import logging
 import sys
 from datetime import datetime
-from dotenv import load_dotenv, find_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 
@@ -13,10 +12,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
-
-# Cargar variables de entorno
-env_file = find_dotenv(".env")
-load_dotenv(env_file)
 
 # Configurar la conexión a la base de datos
 DATABASE_URL = f"postgresql://{os.getenv('DB_URL')}"
