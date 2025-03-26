@@ -1,9 +1,5 @@
 import psycopg2
 import os
-from dotenv import load_dotenv, find_dotenv
-
-# Cargar variables de entorno
-load_dotenv(find_dotenv(".env"))
 
 # Conectar a la base de datos
 DB_CONN = psycopg2.connect(

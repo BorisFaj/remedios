@@ -1,0 +1,29 @@
+FROM python:3.10-slim
+
+ENV POETRY_VENV=/remedios/.venv
+
+# Instalar dependencias básicas
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear entorno virtual
+RUN python3 -m venv $POETRY_VENV \
+    && $POETRY_VENV/bin/pip install --upgrade pip setuptools \
+    && $POETRY_VENV/bin/pip install poetry==2.1.1
+
+ENV PATH="${PATH}:${POETRY_VENV}/bin"
+
+# Copiar código y entrar al directorio
+COPY . /remedios
+WORKDIR /remedios/
+
+RUN poetry config virtualenvs.in-project true
+
+# Instalar dependencias (en el entorno del proyecto)
+RUN $POETRY_VENV/bin/pip install -r requirements.txt
+RUN $POETRY_VENV/bin/pip install -r requirements_text.txt
+
+# Ejecutar
+CMD ["/remedios/.venv/bin/python", "-m", "super_consumer"]

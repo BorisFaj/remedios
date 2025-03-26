@@ -1,5 +1,5 @@
 from whatsapp import get_message, get_phone_number, send_text_answer
-from chat.mistral import ask
+from chat.llamacpp_server import ask
 from log.sender import save_message, format_conversation_history
 import logging
 import sys
