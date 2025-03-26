@@ -1,8 +1,6 @@
 import psycopg2
 import os
-from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv(".env"))
 
 DB_CONN = psycopg2.connect(
     host="golismeos.c5aqi48uyz13.eu-north-1.rds.amazonaws.com",

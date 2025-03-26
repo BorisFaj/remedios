@@ -15,6 +15,7 @@ llm = Llama(model_path=model_path)
 
 
 def ask(chat_history: str) -> str:
+    # Generar respuesta con el modelo
     response = llm(
         prompt=chat_history,
         max_tokens=150,  # Número máximo de tokens en la respuesta
@@ -24,5 +25,9 @@ def ask(chat_history: str) -> str:
         repeat_penalty=1.2,  # Reduce repeticiones
         stop=["\n"]  # Detener generación en nueva línea
     )
+
     # Extraer y devolver la respuesta generada
     return response["choices"][0]["text"].strip()
+
+
+print("Mistral: " + ask("hola que tal"))
