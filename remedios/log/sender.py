@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
+from .base import LogBase
 
 # Configuración de logging
 logging.basicConfig(
@@ -45,7 +46,14 @@ class Message(Base):
 # Crear las tablas en la base de datos (si no existen)
 Base.metadata.create_all(engine)
 
-def save_user(phone_number):
+
+class LogGolismeo(LogBase):
+    def __init__(self, message_queue: [str]):
+        super().__init__(message_queue)
+        self.m_queue = message_queue
+
+
+def check_user(phone_number):
     """Guarda un usuario si no existe en la base de datos."""
     try:
         user = session.query(User).filter_by(phone=phone_number).first()
@@ -60,10 +68,10 @@ def save_user(phone_number):
         session.rollback()
         logger.error(f"❌ Error al guardar usuario {phone_number}: {e}")
 
-def save_message(sender, receiver, message, message_type="text"):
+def validate_message(sender, receiver, message, message_type="text"):
     """Guarda un mensaje en la base de datos."""
-    save_user(sender)  # Registrar el usuario si no existe
-    save_user(receiver)  # Registrar el receptor si no existe
+    check_user(sender)  # Registrar el usuario si no existe
+    check_user(receiver)  # Registrar el receptor si no existe
 
     try:
         new_message = Message(
@@ -79,7 +87,7 @@ def save_message(sender, receiver, message, message_type="text"):
         session.rollback()
         logger.error(f"❌ Error al insertar en la base de datos: {e}")
 
-def get_last_text_messages(phone_number, n=10):
+def __get_last_text_messages(phone_number, n=10):
     """Devuelve los últimos N mensajes de texto enviados o recibidos por un usuario."""
     try:
         messages = session.query(Message).filter(
@@ -95,9 +103,9 @@ def get_last_text_messages(phone_number, n=10):
 def get_context():
     return "Eres un asistente conversacional de WhatsApp llamado 'Remedios', diseñada para ayudar a los usuarios con reservas, consultas generales y soporte básico. Usa un tono amigable, informal y profesional, como si fueras un amigo conocedor que ayuda rápidamente. Responde siempre en el idioma del mensaje del usuario. Limita tus respuestas a 2-3 frases cortas, a menos que el usuario solicite más detalles. Si no entiendes la solicitud o no puedes responder, di algo como: 'Lo siento, no entendí bien. ¿Podrías darme más detalles o reformular tu pregunta?' Si el usuario pide una reserva, pregunta por los detalles necesarios (fecha, hora, servicio, ubicación) y confirma la acción, o deriva a un agente humano si no puedes completarla. Evita dar opiniones personales, consejos médicos, legales o financieros, y no respondas a preguntas sobre temas sensibles o éticos; en su lugar, sugiere consultar a un profesional."
 
-def format_conversation_history(phone_number, new_message, bot_name="Remedios", user_name="User"):
+def get_embeddings_context(phone_number, new_message, bot_name="Remedios", user_name="User"):
     """Devuelve la conversación formateada con el usuario y el bot."""
-    historial = get_last_text_messages(phone_number)
+    historial = __get_last_text_messages(phone_number)
     logger.info(f"({phone_number})[HISTORIAL]: {historial}")
     formatted_history = [f"[SYSTEM]: {get_context()}"]
 

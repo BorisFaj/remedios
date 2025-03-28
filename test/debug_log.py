@@ -11,6 +11,6 @@ print("hola probando")
 print(messages[::-1])
 
 
-las_ms = get_last_text_messages(phone_number)
-formateao_y_to = format_conversation_history(phone_number, "mensaje nuevo")
+las_ms = __get_last_text_messages(phone_number)
+formateao_y_to = get_embeddings_context(phone_number, "mensaje nuevo")
 print(formateao_y_to)

@@ -1,31 +1,10 @@
 import requests
 import json
-import os
-from huggingface_hub import hf_hub_download
 
-access_token = os.getenv("HF_TOKEN")
-# Nombre del repositorio y archivo del modelo
-repo_id="Boritsuki/Mistral-Nemo-Instruct-2407-Q4_K_M-GGUF"
-filename = "mistral-nemo-instruct-2407-q4_k_m.gguf"
-
-# Descargar el modelo si no está en la caché
-model_path = hf_hub_download(repo_id=repo_id, filename=filename, token=access_token)
-
-# Configuración del servidor llama.cpp
-SERVER_URL = "http://localhost:8000/v1/completions"  # Cambia si tu servidor está en otro puerto o dirección
+SERVER_URL = "http://llama:8000/completion"
 
 def ask(texto):
-    """
-    Envía un texto al servidor llama.cpp y devuelve la respuesta generada.
-
-    Args:
-        texto (str): El texto o prompt que se enviará al modelo.
-
-    Returns:
-        str: La respuesta generada por el modelo.
-    """
     try:
-        # Cuerpo de la solicitud
         payload = {
             "prompt": texto,
             "max_tokens": 150,  # Número máximo de tokens en la respuesta
@@ -43,13 +22,13 @@ def ask(texto):
         }
 
         # Realizar la solicitud POST al servidor
-        response = requests.post(SERVER_URL, headers=headers, data=json.dumps(payload))
+        response = requests.post(SERVER_URL, headers=headers, data=json.dumps(payload), timeout=10)
 
         # Verificar si la solicitud fue exitosa
         if response.status_code == 200:
             # Extraer el contenido generado del JSON de respuesta
             respuesta = response.json()
-            return respuesta["choices"][0]["text"].strip()
+            return respuesta["content"]
         else:
             # Manejar errores
             return f"Error: {response.status_code} - {response.text}"
