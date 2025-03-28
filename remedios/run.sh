@@ -42,6 +42,7 @@ if [[ -n "$IMAGE_NAME" ]]; then
   fi
 
   echo "⚙️ Usando KAFKA_TOPIC: $KAFKA_TOPIC"
+  echo "⚙️ Usando KAFKA_GROUP_ID: $KAFKA_GROUP_ID"
   echo "🚀 Iniciando contenedor '$CONTAINER_NAME'..."
   docker run --gpus all -d --name $CONTAINER_NAME \
     --env-file "$SECRETS_PATH" \
