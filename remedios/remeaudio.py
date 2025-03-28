@@ -1,6 +1,6 @@
 from whatsapp import get_message, get_phone_number, send_text_answer, extract_audio
 from stt.whisper import transcribe
-from log.sender import save_message
+from log.sender import validate_message
 import logging
 import sys
 
@@ -30,4 +30,4 @@ def run(request: dict):
             logger.info(f"[IA-Transcription]: {transcription}")
 
             send_text_answer(transcription, message["from"], message["id"], phone_number)
-            save_message(message["from"], "IA", transcription, "audio")
+            validate_message(message["from"], "IA", transcription, "audio")

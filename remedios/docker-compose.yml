@@ -1,0 +1,37 @@
+services:
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama-cuda
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${HOME}/.cache/huggingface/hub/:/models
+    command: >
+      -m /models/models--bartowski--Mistral-Nemo-Instruct-2407-GGUF/snapshots/a2dd64a0a76ea1bdb2bb6ab6fa5496b003c7c908/Mistral-Nemo-Instruct-2407-IQ2_M.gguf
+      --port 8000
+      --host 0.0.0.0
+      --n-predict 50
+      --n-gpu-layers 10
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy: {}  # opcional, vacío
+    runtime: nvidia
+
+  remedios:
+    image: reme-texto
+    build:
+      context: .
+      dockerfile: Dockerfile_text
+    container_name: remedios-texto
+    depends_on:
+      - llama
+    env_file:
+      - ../.secrets
+    environment:
+      - KAFKA_TOPIC=whatsapp-text
+      - KAFKA_GROUP_ID=text
+      - LLAMA_API=http://llama:8000
+    command: >
+      /remedios/.venv/bin/python -m super_consumer
+    dns:
+      - 8.8.8.8

@@ -13,7 +13,7 @@ else:
     warnings.warn("⚠️ No se encontró una GPU disponible. Ejecutando en CPU, esto será más lento.")
 
 
-whisper_model_id = "openai/whisper-large-v3-turbo"
+whisper_model_id = "Boritsuki/whisperL-v3-turbo"
 whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
     whisper_model_id, torch_dtype=torch_dtype, use_safetensors=True
 ).to(device)
