@@ -1,6 +1,6 @@
 from whatsapp import get_message, get_phone_number, send_text_answer
 from chat.llamacpp_server import ask
-from log.sender import save_message, format_conversation_history
+from log.sender import validate_message, get_embeddings_context
 import logging
 import sys
 
@@ -20,19 +20,22 @@ def run(request: dict):
     phone_number = get_phone_number(request)
     logger.info(f"from: {phone_number}")
 
-    if message:
-        if message.get("type") == "text":
-            _message_body = message['text']['body']
-            chat_history = format_conversation_history(message["from"], _message_body)
-            logger.info(f"history: {chat_history}")
-            respuesta_chatgpt = ask(chat_history)
+    try:
+        if message:
+            if message.get("type") == "text":
+                _message_body = message['text']['body']
+                emb = get_embeddings_context(message["from"], _message_body)
+                respuesta_chatgpt = ask(emb)
 
-            logger.info(f"[HUMAN]: {_message_body}")
-            logger.info(f"[IA-Chat]: {respuesta_chatgpt}")
+                logger.info(f"[HUMAN]: {_message_body}")
+                logger.info(f"[IA-Chat]: {respuesta_chatgpt}")
 
-            send_text_answer(respuesta_chatgpt, message["from"], message["id"], phone_number)
-            save_message(message["from"], "IA", _message_body, "text")
-            save_message("IA", message["from"], respuesta_chatgpt, "text")
-            logger.debug("Text answer sent ;)")
-        else:
-            logger.debug("pos na")
+                send_text_answer(respuesta_chatgpt, message["from"], message["id"], phone_number)
+                validate_message(message["from"], "IA", _message_body, "text")
+                validate_message("IA", message["from"], respuesta_chatgpt, "text")
+                logger.debug("Text answer sent ;)")
+            else:
+                logger.debug("pos na")
+    except Exception as _:
+        logger.error("Oye, se nos ha jodido esto")
+        raise
