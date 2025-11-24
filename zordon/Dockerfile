@@ -7,6 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
 
-EXPOSE 5000
+EXPOSE 3000
 
-CMD ["python", "app.py"]
+CMD ["python", "server.py"]

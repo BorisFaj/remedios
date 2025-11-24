@@ -37,7 +37,7 @@ spec:
       containers:
       - name: kafka
         image: apache/kafka:3.7.0
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         env:
         # Obligatorio para KRaft
         - name: KAFKA_PROCESS_ROLES

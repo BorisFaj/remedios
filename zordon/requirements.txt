@@ -1,4 +1,3 @@
 flask
 kafka-python
-boto3
-dotenv
+python-dotenv
