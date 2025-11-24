@@ -1,0 +1,150 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: whatsapp-consumer-config
+  namespace: remedios
+data:
+  TEXT_TOPIC: "whatsapp-text"
+  AUDIO_TOPIC: "whatsapp-audio"
+  TEXT_ENDPOINT: "http://remetext:8000/process"
+  AUDIO_ENDPOINT: "http://remeaudio:8001/process"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whatsapp-consumer
+  namespace: remedios
+  labels:
+    app: whatsapp-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp-consumer
+  template:
+    metadata:
+      labels:
+        app: whatsapp-consumer
+    spec:
+      containers:
+      - name: whatsapp-consumer
+        image: ghcr.io/borisfaj/remedios-consumer:latest
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: remedios-config
+        - configMapRef:
+            name: whatsapp-consumer-config
+        env:
+        - name: GROUP_ID
+          value: "whatsapp-consumer"
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remetext
+  namespace: remedios
+  labels:
+    app: remetext
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: remetext
+  template:
+    metadata:
+      labels:
+        app: remetext
+    spec:
+      containers:
+      - name: remetext
+        image: ghcr.io/borisfaj/remetext:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: remetext
+  namespace: remedios
+spec:
+  selector:
+    app: remetext
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remeaudio
+  namespace: remedios
+  labels:
+    app: remeaudio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: remeaudio
+  template:
+    metadata:
+      labels:
+        app: remeaudio
+    spec:
+      containers:
+      - name: remeaudio
+        image: ghcr.io/borisfaj/remeaudio:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: remeaudio
+  namespace: remedios
+spec:
+  selector:
+    app: remeaudio
+  ports:
+  - port: 8001
+    targetPort: 8001
