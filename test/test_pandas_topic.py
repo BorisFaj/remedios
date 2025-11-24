@@ -1,6 +1,6 @@
-from zordon import KafkaAdminClient
-from zordon.admin import NewTopic
-from zordon.errors import TopicAlreadyExistsError
+from kafka import KafkaAdminClient
+from kafka.admin import NewTopic
+from kafka.errors import TopicAlreadyExistsError
 from dotenv import load_dotenv, find_dotenv
 import os
 
