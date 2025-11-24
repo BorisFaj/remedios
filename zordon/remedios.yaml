@@ -39,7 +39,7 @@ spec:
     spec:
       containers:
       - name: remedios
-        image: ghcr.io/borisfaj/remedios:sha-ca2fe69
+        image: ghcr.io/borisfaj/remedios:latest
         imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:
