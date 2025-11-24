@@ -3,6 +3,9 @@ name: Build and Push (develop)
 on:
   push:
     branches: ["develop"]
+    paths:
+      - "zordon/**"
+      - ".github/workflows/build-and-push.yml"
 
 permissions:
   contents: read
