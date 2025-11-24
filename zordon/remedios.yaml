@@ -1,9 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: remedios
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: remedios-secret
+  namespace: remedios
+type: Opaque
+stringData:
+  WEBHOOK_VERIFY_TOKEN: "845dr489fdgj46fgj4615"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: remedios-config
+  namespace: remedios
+data:
+  BOOTSTRAP_SERVER: "kafka.kafka.svc.cluster.local:9092"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: remedios
   namespace: remedios
-labels:
+  labels:
     app: remedios
 spec:
   replicas: 1
@@ -19,9 +41,25 @@ spec:
       - name: remedios
         image: tuuser/remedios:latest
         imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: remedios-config
+        - secretRef:
+            name: remedios-secret
         ports:
-        - containerPort: 5000
-
+        - containerPort: 3000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 20
 ---
 apiVersion: v1
 kind: Service
@@ -29,9 +67,9 @@ metadata:
   name: remedios
   namespace: remedios
 spec:
-  type: LoadBalancer   # Así lo expones afuera
+  type: LoadBalancer
   ports:
     - port: 80
-      targetPort: 5000
+      targetPort: 3000
   selector:
     app: remedios
