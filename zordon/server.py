@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 import socket
-from kafka import KafkaProducer
+from zordon import KafkaProducer
 import json
 import boto3
 import time
