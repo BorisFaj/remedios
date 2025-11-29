@@ -67,9 +67,31 @@ metadata:
   name: remedios
   namespace: remedios
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
     - port: 80
       targetPort: 3000
   selector:
     app: remedios
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: remedios
+  namespace: remedios
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: remedios
+            port:
+              number: 80
+  tls:
+  - secretName: remedios-tls

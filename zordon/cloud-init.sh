@@ -13,6 +13,13 @@ runcmd:
   - k3s kubectl create namespace kafka
   - k3s kubectl create namespace remedios
 
-  # Aplicar YAMLs desde tu repo
-  - curl -L https://raw.githubusercontent.com/TUUSER/TUREPO/main/kafka.yaml | k3s kubectl apply -f -
-  - curl -L https://raw.githubusercontent.com/TUUSER/TUREPO/main/remedios.yaml | k3s kubectl apply -f -
+  # Certificado autofirmado para remedios.midominio.com (ajusta CN/SAN si usas otro dominio)
+  - mv remedios.cnf /etc/ssl/remedios.cnf
+  - openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/remedios.key -out /etc/ssl/remedios.crt -config /etc/ssl/remedios.cnf
+
+  # Secret TLS (idempotente)
+  - k3s kubectl -n remedios create secret tls remedios-tls --cert=/etc/ssl/remedios.crt --key=/etc/ssl/remedios.key --dry-run=client -o yaml | k3s kubectl apply -f -
+
+  # Aplicar YAMLs
+  - k3s kubectl apply -f kafka.yaml
+  - k3s kubectl apply -f remedios.yaml
