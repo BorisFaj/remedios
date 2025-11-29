@@ -1,0 +1,13 @@
+[req]
+distinguished_name = dn
+x509_extensions = v3_req
+prompt = no
+
+[dn]
+CN = 80.225.190.101
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 80.225.190.101
