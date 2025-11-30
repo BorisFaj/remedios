@@ -1,0 +1,20 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      # Config ACME / Let's Encrypt
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.email=remedios.ia.info@gmail.com"
+      - "--certificatesresolvers.le.acme.storage=/data/acme.json"
+
+    # Persistir el archivo acme.json para no perder certificados en reinicios
+    persistence:
+      enabled: true
+      path: /data
+      size: 1Gi
+      accessMode: ReadWriteOnce
