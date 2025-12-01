@@ -21,8 +21,8 @@ if [ -z "${TAILSCALE_AUTHKEY:-}" ]; then
   exit 1
 fi
 
-if [ -z "${MASTER_TAILSCALE_IP:-}" ]; then
-  echo "ERROR: MASTER_TAILSCALE_IP vacío en .secrets"
+if [ -z "${MASTER_TAILSCALE_IP:-}" ] && [ -z "${MASTER_TAILSCALE_HOST:-}" ]; then
+  echo "ERROR: MASTER_TAILSCALE_IP/MASTER_TAILSCALE_HOST vacíos en .secrets"
   exit 1
 fi
 
@@ -32,10 +32,18 @@ if [ -z "${K3S_TOKEN:-}" ]; then
 fi
 
 TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME:-remedios-node-$(hostname)}"
-K3S_URL="https://${MASTER_TAILSCALE_IP}:6443"
+TAILSCALE_UP_FLAGS="${TAILSCALE_UP_FLAGS:-}"
+MASTER_TAILSCALE_HOST="${MASTER_TAILSCALE_HOST:-$MASTER_TAILSCALE_IP}"
+K3S_URL="https://${MASTER_TAILSCALE_HOST}:6443"
 
-echo "Usando MASTER_TAILSCALE_IP=$MASTER_TAILSCALE_IP"
+if [ -n "${MASTER_TAILSCALE_IP:-}" ]; then
+  echo "Usando MASTER_TAILSCALE_IP=$MASTER_TAILSCALE_IP"
+fi
+echo "Usando MASTER_TAILSCALE_HOST=$MASTER_TAILSCALE_HOST (MagicDNS o IP)"
 echo "Usando TAILSCALE_HOSTNAME=$TAILSCALE_HOSTNAME"
+if [ -n "$TAILSCALE_UP_FLAGS" ]; then
+  echo "Usando flags adicionales para tailscale up: $TAILSCALE_UP_FLAGS"
+fi
 
 # ==== 2. Paquetes ====
 
@@ -47,7 +55,7 @@ sudo apt install -y curl ufw openssl
 echo "Instalando y configurando Tailscale"
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo systemctl enable --now tailscaled
-sudo tailscale up --authkey "$TAILSCALE_AUTHKEY" --hostname "$TAILSCALE_HOSTNAME" --accept-routes
+sudo tailscale up --reset --authkey "$TAILSCALE_AUTHKEY" --hostname "$TAILSCALE_HOSTNAME" --accept-routes $TAILSCALE_UP_FLAGS
 
 TAILSCALE_IP="$(sudo tailscale ip -4 | head -n 1)"
 if [ -z "$TAILSCALE_IP" ]; then

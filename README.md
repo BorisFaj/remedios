@@ -22,8 +22,8 @@ Requisitos
   - `DOMAIN=tu.dominio`
   - `WEBHOOK_VERIFY_TOKEN=token_webhook` (opcional pero recomendado)
   - `TAILSCALE_AUTHKEY=tskey-...` (auth key de Tailscale)
-  - Para workers: `MASTER_TAILSCALE_IP=100.x.y.z` (IP tailscale del master) y `K3S_TOKEN=<node-token>`
-  - (opcional) `TAILSCALE_HOSTNAME=nombre-personalizado`
+  - Para workers: `MASTER_TAILSCALE_IP=100.x.y.z` (IP tailscale del master) y `K3S_TOKEN=<node-token>`; si usas MagicDNS, puedes poner `MASTER_TAILSCALE_HOST=host.tailnet.ts.net` y olvidarte de la IP.
+  - (opcional) `TAILSCALE_HOSTNAME=nombre-personalizado`, `TAILSCALE_MAGICDNS_HOST=host.tailnet.ts.net` para añadirlo como SAN en el API server, `TAILSCALE_UP_FLAGS="--ssh"` si reejecutas sobre una máquina que ya tenía `tailscale up` con SSH u otros flags.
   - (añade otras vars si las necesitas)
 
 Despliegue rápido en instancia nueva
@@ -37,6 +37,7 @@ Despliegue rápido en instancia nueva
    ```
    El script:
    - Instala k3s.
+   - Detecta (o usa `TAILSCALE_MAGICDNS_HOST`) y añade el MagicDNS del master como SAN TLS para que puedas usar el hostname en kubeconfig/join.
    - Asegura rutas de red internas (10.42.0.0/16 pods, 10.43.0.0/16 servicios) por la interfaz CNI.
    - Aplica Traefik con ACME (HTTP-01).
    - Despliega Kafka (`kafka` namespace).
@@ -44,24 +45,24 @@ Despliegue rápido en instancia nueva
 
 Workers sobre Tailscale
 -----------------------
-- Ejecuta `bash master-init.sh` primero. Guarda el `K3S_TOKEN` desde `/var/lib/rancher/k3s/server/node-token` y la IP de tailscale (`tailscale ip -4 | head -n1`).
-- En cada worker copia `.secrets` con `TAILSCALE_AUTHKEY`, `MASTER_TAILSCALE_IP` y `K3S_TOKEN` (opcionalmente `TAILSCALE_HOSTNAME`), luego ejecuta `bash node-init.sh`.
+- Ejecuta `bash master-init.sh` primero. Guarda el `K3S_TOKEN` desde `/var/lib/rancher/k3s/server/node-token` y la IP de tailscale (`tailscale ip -4 | head -n1`) o su MagicDNS (`tailscale status --json | jq -r '.Self.DNSName'`).
+- En cada worker copia `.secrets` con `TAILSCALE_AUTHKEY`, `K3S_TOKEN` y **una** de estas dos: `MASTER_TAILSCALE_IP` (100.x) o `MASTER_TAILSCALE_HOST` (MagicDNS tipo `host.tailnet.ts.net`). Opcionalmente `TAILSCALE_HOSTNAME`. Luego ejecuta `bash node-init.sh`.
 - Todo el tráfico de control y flannel viaja por `tailscale0`; expone 80/443 hacia Internet para Traefik como antes.
 
 Despliegue con Ansible (Tailscale automático)
 ---------------------------------------------
 - Prepara un inventario con grupos `master` y `nodes` (ejemplo en `zordon/ansible/inventory.example.ini`).
-- Crea en tu máquina (no se trackea en git) el fichero `zordon/.secrets` con las variables base (`DOMAIN`, `WEBHOOK_VERIFY_TOKEN`, `TAILSCALE_AUTHKEY`, opcional `TAILSCALE_HOSTNAME`). No pongas `MASTER_TAILSCALE_IP` ni `K3S_TOKEN`; el playbook los añadirá en destino.
+- Crea en tu máquina (no se trackea en git) el fichero `zordon/.secrets` con las variables base (`DOMAIN`, `WEBHOOK_VERIFY_TOKEN`, `TAILSCALE_AUTHKEY`, opcional `TAILSCALE_HOSTNAME`). No pongas `MASTER_TAILSCALE_IP`/`MASTER_TAILSCALE_HOST` ni `K3S_TOKEN`; el playbook los añadirá en destino.
 - Si usas imágenes privadas en GHCR, añade en `.secrets`: `GHCR_USERNAME` (tu usuario de GitHub) y `GHCR_TOKEN` (PAT con `read:packages`). El script creará el secret `ghcr-creds` en el namespace `remedios` y los deployments ya lo referencian en `imagePullSecrets`.
 - Ejecuta desde la raíz del repo:
   ```bash
   ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
   ```
-- El playbook copia los scripts, bootstrappea el master, obtiene automáticamente la IP de tailscale y el `K3S_TOKEN`, y luego une los workers sin que tengas que pasar manualmente esos datos.
+- El playbook copia los scripts, bootstrappea el master, obtiene automáticamente la IP/MagicDNS de tailscale y el `K3S_TOKEN`, y luego une los workers sin que tengas que pasar manualmente esos datos.
 - Casos de uso:
   - **Cluster de un solo nodo (solo master)**: define solo el host en `master` (o usa `--limit master`). No es necesario declarar `nodes`.
   - **Cluster nuevo con varios nodos**: define `master` + `nodes` y ejecuta el playbook completo (sin `--limit`).
-  - **Añadir workers a un cluster existente**: añade los nuevos hosts en el grupo `nodes` y ejecuta `ansible-playbook ... --limit <host1>,<host2>` (o `--limit nodes` si solo hay nuevos). El play contactará al `master` del inventario para leer su IP de tailscale y el token, sin reprovisionar el master.
+  - **Añadir workers a un cluster existente**: añade los nuevos hosts en el grupo `nodes` y ejecuta `ansible-playbook ... --limit <host1>,<host2>` (o `--limit nodes` si solo hay nuevos). El play contactará al `master` del inventario para leer su IP de tailscale (y su MagicDNS si existe) y el token, sin reprovisionar el master.
   - **Solo añadir un worker concreto**: deja el `master` definido en el inventario (para poder delegar), añade el host al grupo `nodes` y ejecuta, por ejemplo:
     ```bash
     ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml --limit master1,worker2
@@ -108,6 +109,19 @@ Verificación
   curl -v http://$DOMAIN/.well-known/acme-challenge/test
   ```
   Debe responder 404 desde Traefik sin redirecciones.
+
+- Cluster sobre Tailscale/MagicDNS:
+  ```bash
+  sudo k3s kubectl get nodes -o wide                  # InternalIP 100.x y Ready
+  sudo k3s kubectl get pods -A -o wide                # kube-system/flannel/traefik en Running
+  sudo k3s kubectl cluster-info
+  grep server: /etc/rancher/k3s/k3s.yaml              # Debe apuntar a tu MagicDNS:6443
+  sudo k3s kubectl -n remedios get all                # Recursos de la app
+  sudo k3s kubectl -n kafka get all                   # Kafka
+  sudo k3s kubectl -n remedios exec deploy/whatsapp-consumer -- printenv BOOTSTRAP_SERVER
+  sudo k3s kubectl -n remedios logs deploy/remedios | tail
+  curl -v https://$DOMAIN/health
+  ```
 
 Despliegue manual (si ya tienes k3s)
 ------------------------------------
