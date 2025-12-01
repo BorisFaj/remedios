@@ -27,6 +27,7 @@ if [ -z "${TAILSCALE_AUTHKEY:-}" ]; then
 fi
 
 TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME:-remedios-master}"
+GHCR_USERNAME="${GHCR_USERNAME:-${GITHUB_USERNAME:-}}"
 
 echo "Usando DOMAIN=$DOMAIN"
 echo "Usando TAILSCALE_HOSTNAME=$TAILSCALE_HOSTNAME"
@@ -93,17 +94,33 @@ sudo ip route replace 10.42.0.0/16 dev "$CNI_IFACE"
 sudo k3s kubectl create namespace kafka || true
 sudo k3s kubectl create namespace remedios || true
 
-# ==== 8. Traefik + ACME (Let’s Encrypt) ====
+# ==== 8. Pull secret para GHCR (opcional) ====
+if [ -n "${GHCR_TOKEN:-}" ]; then
+  if [ -z "$GHCR_USERNAME" ]; then
+    echo "ERROR: GHCR_TOKEN presente pero GHCR_USERNAME vacío. Añádelo en .secrets."
+    exit 1
+  fi
+  echo "Creando secret ghcr-creds en remedios para ghcr.io (usuario $GHCR_USERNAME)"
+  sudo k3s kubectl -n remedios delete secret ghcr-creds --ignore-not-found
+  sudo k3s kubectl -n remedios create secret docker-registry ghcr-creds \
+    --docker-server=ghcr.io \
+    --docker-username="$GHCR_USERNAME" \
+    --docker-password="$GHCR_TOKEN"
+else
+  echo "GHCR_TOKEN no definido: se asumirá que las imágenes son públicas"
+fi
+
+# ==== 9. Traefik + ACME (Let’s Encrypt) ====
 
 echo "Aplicando configuracion ACME para Traefik"
 sudo k3s kubectl apply -n kube-system -f traefik-acme.yaml
 
-# ==== 9. Aplicar kafka ====
+# ==== 10. Aplicar kafka ====
 
 echo "Aplicando kafka.yaml"
 sudo k3s kubectl apply -f kafka.yaml
 
-# ==== 10. Aplicar remedios.yaml con envsubst ====
+# ==== 11. Aplicar remedios.yaml con envsubst ====
 
 echo "Aplicando remedios.yaml con DOMAIN=$DOMAIN"
 envsubst < remedios.yaml > /tmp/remedios.rendered.yaml

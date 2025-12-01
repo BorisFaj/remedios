@@ -52,6 +52,7 @@ Despliegue con Ansible (Tailscale automático)
 ---------------------------------------------
 - Prepara un inventario con grupos `master` y `nodes` (ejemplo en `zordon/ansible/inventory.example.ini`).
 - Crea en tu máquina (no se trackea en git) el fichero `zordon/.secrets` con las variables base (`DOMAIN`, `WEBHOOK_VERIFY_TOKEN`, `TAILSCALE_AUTHKEY`, opcional `TAILSCALE_HOSTNAME`). No pongas `MASTER_TAILSCALE_IP` ni `K3S_TOKEN`; el playbook los añadirá en destino.
+- Si usas imágenes privadas en GHCR, añade en `.secrets`: `GHCR_USERNAME` (tu usuario de GitHub) y `GHCR_TOKEN` (PAT con `read:packages`). El script creará el secret `ghcr-creds` en el namespace `remedios` y los deployments ya lo referencian en `imagePullSecrets`.
 - Ejecuta desde la raíz del repo:
   ```bash
   ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
@@ -66,6 +67,16 @@ Despliegue con Ansible (Tailscale automático)
     ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml --limit master1,worker2
     ```
     Incluir el master en el `--limit` permite delegar la lectura de IP/token sin tocarlo; no se reprovisiona.
+
+Token de GitHub para GHCR
+-------------------------
+- Ve a GitHub → Settings → Developer settings → Personal access tokens.
+- Crea un token (clásico o fine-grained) con permiso `read:packages`.
+- Usa tu usuario de GitHub como `GHCR_USERNAME` y ese token como `GHCR_TOKEN` en `.secrets`.
+
+Notas sobre whatsapp-consumer
+-----------------------------
+- El manifiesto `whatsapp-consumer.yaml` solo despliega el consumer (no incluye los servicios `remetext/remeaudio`). Ajusta en el ConfigMap `whatsapp-consumer-config` los endpoints `TEXT_ENDPOINT` y `AUDIO_ENDPOINT` a tus servicios reales antes de aplicarlo.
 
 Cómo obtener el auth key de Tailscale
 -------------------------------------
