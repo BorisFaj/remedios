@@ -7,7 +7,8 @@ Contenido clave
 ---------------
 - **Aplicación**: Flask (`zordon/server.py`) con endpoints `/webhook` (POST/GET) y `/health`. Envía los mensajes a Kafka (`whatsapp-text` o `whatsapp-audio`) usando `BOOTSTRAP_SERVER`.
 - **Infra**: manifiestos y scripts en `zordon/`:
-  - `cloud-init.sh`: instala k3s, abre puertos, fija rutas CNI internas, aplica Traefik + ACME y despliega Kafka y la app.
+  - `master-init.sh`: instala k3s, abre puertos, fija rutas CNI internas, aplica Traefik + ACME y despliega Kafka y la app sobre tailscale0.
+  - `node-init.sh`: añade workers a ese cluster k3s, también sobre tailscale0.
   - `traefik-acme.yaml`: configura Traefik para certs Let’s Encrypt (HTTP-01).
   - `remedios.yaml`: Deployment/Service/Ingress de la app.
   - `kafka.yaml`: despliegue de Kafka/Zookeeper.
@@ -20,6 +21,9 @@ Requisitos
 - `.secrets` en `zordon/` con:
   - `DOMAIN=tu.dominio`
   - `WEBHOOK_VERIFY_TOKEN=token_webhook` (opcional pero recomendado)
+  - `TAILSCALE_AUTHKEY=tskey-...` (auth key de Tailscale)
+  - Para workers: `MASTER_TAILSCALE_IP=100.x.y.z` (IP tailscale del master) y `K3S_TOKEN=<node-token>`
+  - (opcional) `TAILSCALE_HOSTNAME=nombre-personalizado`
   - (añade otras vars si las necesitas)
 
 Despliegue rápido en instancia nueva
@@ -29,7 +33,7 @@ Despliegue rápido en instancia nueva
 3) Ejecuta el bootstrap:
    ```bash
    cd zordon
-   bash cloud-init.sh
+   bash master-init.sh
    ```
    El script:
    - Instala k3s.
@@ -37,6 +41,36 @@ Despliegue rápido en instancia nueva
    - Aplica Traefik con ACME (HTTP-01).
    - Despliega Kafka (`kafka` namespace).
    - Despliega Remedios (`remedios` namespace) renderizando `remedios.yaml` con `envsubst`.
+
+Workers sobre Tailscale
+-----------------------
+- Ejecuta `bash master-init.sh` primero. Guarda el `K3S_TOKEN` desde `/var/lib/rancher/k3s/server/node-token` y la IP de tailscale (`tailscale ip -4 | head -n1`).
+- En cada worker copia `.secrets` con `TAILSCALE_AUTHKEY`, `MASTER_TAILSCALE_IP` y `K3S_TOKEN` (opcionalmente `TAILSCALE_HOSTNAME`), luego ejecuta `bash node-init.sh`.
+- Todo el tráfico de control y flannel viaja por `tailscale0`; expone 80/443 hacia Internet para Traefik como antes.
+
+Despliegue con Ansible (Tailscale automático)
+---------------------------------------------
+- Prepara un inventario con grupos `master` y `nodes` (ejemplo en `zordon/ansible/inventory.example.ini`).
+- Crea en tu máquina (no se trackea en git) el fichero `zordon/.secrets` con las variables base (`DOMAIN`, `WEBHOOK_VERIFY_TOKEN`, `TAILSCALE_AUTHKEY`, opcional `TAILSCALE_HOSTNAME`). No pongas `MASTER_TAILSCALE_IP` ni `K3S_TOKEN`; el playbook los añadirá en destino.
+- Ejecuta desde la raíz del repo:
+  ```bash
+  ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
+  ```
+- El playbook copia los scripts, bootstrappea el master, obtiene automáticamente la IP de tailscale y el `K3S_TOKEN`, y luego une los workers sin que tengas que pasar manualmente esos datos.
+- Casos de uso:
+  - **Cluster de un solo nodo (solo master)**: define solo el host en `master` (o usa `--limit master`). No es necesario declarar `nodes`.
+  - **Cluster nuevo con varios nodos**: define `master` + `nodes` y ejecuta el playbook completo (sin `--limit`).
+  - **Añadir workers a un cluster existente**: añade los nuevos hosts en el grupo `nodes` y ejecuta `ansible-playbook ... --limit <host1>,<host2>` (o `--limit nodes` si solo hay nuevos). El play contactará al `master` del inventario para leer su IP de tailscale y el token, sin reprovisionar el master.
+  - **Solo añadir un worker concreto**: deja el `master` definido en el inventario (para poder delegar), añade el host al grupo `nodes` y ejecuta, por ejemplo:
+    ```bash
+    ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml --limit master1,worker2
+    ```
+    Incluir el master en el `--limit` permite delegar la lectura de IP/token sin tocarlo; no se reprovisiona.
+
+Cómo obtener el auth key de Tailscale
+-------------------------------------
+- Entra a https://login.tailscale.com → Settings → Keys → Generate auth key (idealmente *ephemeral* + reusable si quieres añadir nodos).
+- Usa ese valor como `TAILSCALE_AUTHKEY` en `group_vars/all.yml` o en tus variables de inventario.
 
 Verificación
 ------------
