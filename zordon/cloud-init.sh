@@ -51,22 +51,33 @@ for i in $(seq 1 30); do
   sleep 5
 done
 
-# ==== 5. Namespaces ====
+# ==== 5. Redes: rutas internas ====
+# Asegurar que el host tiene rutas a los CIDR de servicios/pods por la interfaz CNI
+CNI_IFACE="$(ip -o link show | awk -F': ' '/^(cni|flannel|vxlan)/{print $2; exit}')"
+if [ -z "$CNI_IFACE" ]; then
+  echo "ERROR: No se detectó interfaz CNI (cni0/flannel.1). Revisa el despliegue de k3s."
+  exit 1
+fi
+echo "Usando interfaz CNI: $CNI_IFACE"
+sudo ip route replace 10.43.0.0/16 dev "$CNI_IFACE"
+sudo ip route replace 10.42.0.0/16 dev "$CNI_IFACE"
+
+# ==== 6. Namespaces ====
 
 sudo k3s kubectl create namespace kafka || true
 sudo k3s kubectl create namespace remedios || true
 
-# ==== 6. Traefik + ACME (Let’s Encrypt) ====
+# ==== 7. Traefik + ACME (Let’s Encrypt) ====
 
 echo "Aplicando configuracion ACME para Traefik"
 sudo k3s kubectl apply -n kube-system -f traefik-acme.yaml
 
-# ==== 7. Aplicar kafka ====
+# ==== 8. Aplicar kafka ====
 
 echo "Aplicando kafka.yaml"
 sudo k3s kubectl apply -f kafka.yaml
 
-# ==== 8. Aplicar remedios.yaml con envsubst ====
+# ==== 9. Aplicar remedios.yaml con envsubst ====
 
 echo "Aplicando remedios.yaml con DOMAIN=$DOMAIN"
 envsubst < remedios.yaml > /tmp/remedios.rendered.yaml
