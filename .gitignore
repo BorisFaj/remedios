@@ -384,6 +384,10 @@ pyrightconfig.json
 pyvenv.cfg
 pip-selfcheck.json
 
+# Local secrets / inventarios
+zordon/.secrets
+zordon/ansible/inventory.ini
+
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm,flask,virtualenv
 
 # Idea
