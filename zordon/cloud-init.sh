@@ -10,21 +10,6 @@ if [ ! -f .secrets ]; then
   exit 1
 fi
 
-if [ ! -f remedios.cnf ]; then
-  echo "ERROR: remedios.cnf no encontrado"
-  exit 1
-fi
-
-if [ ! -f kafka.yaml ]; then
-  echo "ERROR: kafka.yaml no encontrado"
-  exit 1
-fi
-
-if [ ! -f remedios.yaml ]; then
-  echo "ERROR: remedios.yaml no encontrado"
-  exit 1
-fi
-
 # ==== 1. Cargar variables ====
 
 set -a
@@ -71,23 +56,10 @@ done
 sudo k3s kubectl create namespace kafka || true
 sudo k3s kubectl create namespace remedios || true
 
-# ==== 6. Certificado ====
+# ==== 6. Traefik + ACME (Let’s Encrypt) ====
 
-echo "Moviendo remedios.cnf a /etc/ssl/"
-sudo mv remedios.cnf /etc/ssl/remedios.cnf
-
-echo "Generando certificado para $DOMAIN"
-sudo env DOMAIN="$DOMAIN" openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout /etc/ssl/remedios.key \
-  -out /etc/ssl/remedios.crt \
-  -config /etc/ssl/remedios.cnf
-
-
-echo "Creando secret TLS"
-sudo k3s kubectl -n remedios create secret tls remedios-tls \
-  --cert=/etc/ssl/remedios.crt \
-  --key=/etc/ssl/remedios.key \
-  --dry-run=client -o yaml | sudo k3s kubectl apply -f -
+echo "Aplicando configuracion ACME para Traefik"
+sudo k3s kubectl apply -n kube-system -f traefik-acme.yaml
 
 # ==== 7. Aplicar kafka ====
 
