@@ -7,6 +7,7 @@ import logging
 from dotenv import load_dotenv, find_dotenv
 import os
 import atexit
+import uuid
 
 load_dotenv(find_dotenv(".env"))
 
@@ -67,14 +68,38 @@ def get_topic(data):
     else:
         return "whatsapp-text"
 
+
+def build_key(data):
+    """Construye una clave estable para Kafka usando message_id y remitente."""
+
+    try:
+        changes = data["entry"][0].get("changes", [])
+        value = changes[0].get("value", {})
+        wa_id = value.get("contacts", [{}])[0].get("wa_id", "unknown")
+
+        if "messages" in value and value["messages"]:
+            message_id = value["messages"][0].get("id", str(uuid.uuid4()))
+        elif "statuses" in value and value["statuses"]:
+            message_id = value["statuses"][0].get("id", str(uuid.uuid4()))
+        else:
+            message_id = str(uuid.uuid4())
+
+        key = f"{wa_id}_{message_id}"
+    except Exception:
+        key = str(uuid.uuid4())
+
+    return key.encode("utf-8")
+
+
 def send_to_kafka(data, topic):
     """Encola el mensaje en Kafka."""
 
     payload = json.dumps(data).encode("utf-8")
+    key = build_key(data)
 
     future = producer.send(
         topic,
-        key=hostname,
+        key=key,
         value=payload,
     )
     future.add_callback(on_success)

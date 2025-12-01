@@ -1,0 +1,157 @@
+---
+- name: Bootstrap k3s master over Tailscale
+  hosts: master
+  become: true
+  gather_facts: false
+  vars:
+    remedios_dir: /opt/remedios
+    secrets_src: "{{ playbook_dir }}/../.secrets"
+  tasks:
+    - name: Verificar que existe el fichero .secrets en el controlador
+      stat:
+        path: "{{ secrets_src }}"
+      register: secrets_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Abort if .secrets is missing
+      fail:
+        msg: "Crea {{ secrets_src }} con las variables base (DOMAIN, WEBHOOK_VERIFY_TOKEN, TAILSCALE_AUTHKEY, etc.)"
+      when: not secrets_file.stat.exists
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Crear carpeta de trabajo
+      file:
+        path: "{{ remedios_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copiar script master-init.sh
+      copy:
+        src: ../master-init.sh
+        dest: "{{ remedios_dir }}/master-init.sh"
+        mode: "0755"
+
+    - name: Copiar .secrets del master desde el controlador
+      copy:
+        src: "{{ secrets_src }}"
+        dest: "{{ remedios_dir }}/.secrets"
+        mode: "0600"
+
+    - name: Ejecutar bootstrap de master
+      command: bash master-init.sh
+      args:
+        chdir: "{{ remedios_dir }}"
+
+    - name: Obtener IP tailscale del master
+      command: tailscale ip -4
+      register: tailscale_ip
+      changed_when: false
+
+    - name: Guardar IP tailscale en hostvars
+      set_fact:
+        master_tailscale_ip: "{{ tailscale_ip.stdout_lines[0] }}"
+
+    - name: Leer token de k3s
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_raw
+
+    - name: Guardar token en hostvars
+      set_fact:
+        k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+- name: Bootstrap k3s workers over Tailscale
+  hosts: nodes
+  become: true
+  gather_facts: false
+  vars:
+    remedios_dir: /opt/remedios
+    master_host: "{{ groups['master'][0] }}"
+    secrets_src: "{{ playbook_dir }}/../.secrets"
+  tasks:
+    - name: Verificar que existe el fichero .secrets en el controlador
+      stat:
+        path: "{{ secrets_src }}"
+      register: node_secrets_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Abort if .secrets is missing
+      fail:
+        msg: "Crea {{ secrets_src }} con las variables base (al menos TAILSCALE_AUTHKEY)"
+      when: not node_secrets_file.stat.exists
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Obtener IP tailscale del master (si no existe)
+      command: tailscale ip -4
+      register: master_ts_ip_cmd
+      delegate_to: "{{ master_host }}"
+      run_once: true
+      when: hostvars[master_host].master_tailscale_ip is not defined
+      changed_when: false
+
+    - name: Guardar IP tailscale del master
+      set_fact:
+        master_tailscale_ip: "{{ master_ts_ip_cmd.stdout_lines[0] }}"
+      delegate_to: "{{ master_host }}"
+      delegate_facts: true
+      run_once: true
+      when: master_ts_ip_cmd is defined
+
+    - name: Obtener token de k3s del master (si no existe)
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: master_token_raw
+      delegate_to: "{{ master_host }}"
+      run_once: true
+      when: hostvars[master_host].k3s_token is not defined
+
+    - name: Guardar token de k3s del master
+      set_fact:
+        k3s_token: "{{ master_token_raw.content | b64decode | trim }}"
+      delegate_to: "{{ master_host }}"
+      delegate_facts: true
+      run_once: true
+      when: master_token_raw is defined
+
+    - name: Crear carpeta de trabajo
+      file:
+        path: "{{ remedios_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copiar script node-init.sh
+      copy:
+        src: ../node-init.sh
+        dest: "{{ remedios_dir }}/node-init.sh"
+        mode: "0755"
+
+    - name: Copiar .secrets.base para el worker desde el controlador
+      copy:
+        src: "{{ secrets_src }}"
+        dest: "{{ remedios_dir }}/.secrets"
+        mode: "0600"
+
+    - name: Inyectar MASTER_TAILSCALE_IP
+      lineinfile:
+        path: "{{ remedios_dir }}/.secrets"
+        regexp: '^MASTER_TAILSCALE_IP='
+        line: "MASTER_TAILSCALE_IP={{ hostvars[master_host].master_tailscale_ip }}"
+
+    - name: Inyectar K3S_TOKEN
+      lineinfile:
+        path: "{{ remedios_dir }}/.secrets"
+        regexp: '^K3S_TOKEN='
+        line: "K3S_TOKEN={{ hostvars[master_host].k3s_token }}"
+
+    - name: Ejecutar bootstrap del worker
+      command: bash node-init.sh
+      args:
+        chdir: "{{ remedios_dir }}"

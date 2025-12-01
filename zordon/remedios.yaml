@@ -1,16 +1,11 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: remedios
----
-apiVersion: v1
 kind: Secret
 metadata:
   name: remedios-secret
   namespace: remedios
 type: Opaque
 stringData:
-  WEBHOOK_VERIFY_TOKEN: "845dr489fdgj46fgj4615"
+  WEBHOOK_VERIFY_TOKEN: ${WEBHOOK_VERIFY_TOKEN}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -38,28 +33,28 @@ spec:
         app: remedios
     spec:
       containers:
-      - name: remedios
-        image: ghcr.io/borisfaj/remedios:latest
-        imagePullPolicy: IfNotPresent
-        envFrom:
-        - configMapRef:
-            name: remedios-config
-        - secretRef:
-            name: remedios-secret
-        ports:
-        - containerPort: 3000
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 10
-          periodSeconds: 20
+        - name: remedios
+          image: ghcr.io/borisfaj/remedios:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: remedios-config
+            - secretRef:
+                name: remedios-secret
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 20
 ---
 apiVersion: v1
 kind: Service
@@ -67,9 +62,32 @@ metadata:
   name: remedios
   namespace: remedios
 spec:
-  type: LoadBalancer
+  type: ClusterIP
+  selector:
+    app: remedios
   ports:
     - port: 80
       targetPort: 3000
-  selector:
-    app: remedios
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: remedios
+  namespace: remedios
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: le
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+    - host: ${DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: remedios
+                port:
+                  number: 80
