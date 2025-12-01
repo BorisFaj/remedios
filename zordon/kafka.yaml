@@ -19,6 +19,22 @@ spec:
       port: 9093
       targetPort: 9093
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  namespace: kafka
+data:
+  server.properties: |-
+    process.roles=broker,controller
+    node.id=1
+    controller.quorum.voters=1@kafka:9093
+    listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+    advertised.listeners=PLAINTEXT://kafka.kafka.svc.cluster.local:9092
+    listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+    log.dirs=/var/lib/kafka/data
+  cluster.id: "fvshNY7bTPqFhWF7HFB2cw"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -39,39 +55,39 @@ spec:
         image: apache/kafka:3.7.0
         imagePullPolicy: IfNotPresent
         env:
-        # Obligatorio para KRaft
-        - name: KAFKA_PROCESS_ROLES
-          value: "broker,controller"
-
-        - name: KAFKA_NODE_ID
-          value: "1"
-
-        - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-          value: "1@kafka:9093"
-
-        - name: KAFKA_LISTENERS
-          value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
-
-        - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://kafka.kafka.svc.cluster.local:9092"
-
-        - name: KAFKA_CONTROLLER_LISTENER_NAMES
-          value: "CONTROLLER"
-
-        # Configuración de logs/ISR en single-node
-        - name: KAFKA_NUM_PARTITIONS
-          value: "1"
-        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-          value: "1"
-        - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
-          value: "1"
-        - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
-          value: "1"
-
-        # Directorio de datos
+        - name: KAFKA_CLUSTER_ID
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-config
+              key: cluster.id
         - name: KAFKA_LOG_DIRS
-          value: "/tmp/kraft-combined-logs"
+          value: "/var/lib/kafka/data"
+
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          if [ ! -f "${KAFKA_LOG_DIRS}/meta.properties" ]; then
+            echo "meta.properties not found, formatting storage with cluster id ${KAFKA_CLUSTER_ID}"
+            ${KAFKA_HOME:-/opt/kafka}/bin/kafka-storage.sh format -t "${KAFKA_CLUSTER_ID}" -c /opt/kafka/config/kraft/server.properties
+          else
+            echo "meta.properties already exists in ${KAFKA_LOG_DIRS}, skipping format"
+          fi
+          exec ${KAFKA_HOME:-/opt/kafka}/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
 
         ports:
         - containerPort: 9092
         - containerPort: 9093
+        volumeMounts:
+        - name: kafka-config
+          mountPath: /opt/kafka/config/kraft/server.properties
+          subPath: server.properties
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+
+      volumes:
+      - name: kafka-config
+        configMap:
+          name: kafka-config
+      - name: kafka-data
+        emptyDir: {}
