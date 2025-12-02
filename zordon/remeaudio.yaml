@@ -6,8 +6,8 @@ metadata:
 data:
   KAFKA_TOPIC: "whatsapp-audio"
   KAFKA_GROUP_ID: "remeaudio"
-  # Usa un modelo más pequeño si no hay recursos: openai/whisper-base o tiny
-  WHISPER_MODEL: "Boritsuki/whisperL-v3-turbo"
+  # Usa un modelo más pequeño si no hay recursos: openai/whisper-small/base/tiny
+  WHISPER_MODEL: "openai/whisper-small"
 ---
 apiVersion: apps/v1
 kind: Deployment
