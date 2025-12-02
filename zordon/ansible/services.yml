@@ -1,0 +1,110 @@
+---
+- name: Build and deploy remedios services
+  hosts: master
+  become: true
+  gather_facts: false
+  vars:
+    app_root: /opt/remedios
+    src_dir: "{{ app_root }}/src"
+    remedios_src: "{{ src_dir }}/remedios"
+    kubeconfig: /etc/rancher/k3s/k3s.yaml
+    secrets_src: "{{ playbook_dir }}/../.secrets"
+  tasks:
+    - name: Verificar que existe el fichero .secrets en el controlador
+      stat:
+        path: "{{ secrets_src }}"
+      register: secrets_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Abort if .secrets is missing
+      fail:
+        msg: "Crea {{ secrets_src }} con GRAPH_API_TOKEN, GRAPH_URL y el resto de variables necesarias"
+      when: not secrets_file.stat.exists
+      delegate_to: localhost
+      run_once: true
+      become: false
+
+    - name: Crear carpetas de trabajo
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ app_root }}"
+        - "{{ src_dir }}"
+
+    - name: Sincronizar código de remedios al master
+      synchronize:
+        src: "{{ playbook_dir }}/../../remedios/"
+        dest: "{{ remedios_src }}/"
+        delete: no
+        rsync_opts:
+          - "--exclude=.venv"
+          - "--exclude=__pycache__"
+          - "--exclude=.git"
+
+    - name: Copiar manifiesto de remetext
+      copy:
+        src: ../remetext.yaml
+        dest: "{{ app_root }}/remetext.yaml"
+        mode: "0644"
+
+    - name: Copiar .secrets al master
+      copy:
+        src: "{{ secrets_src }}"
+        dest: "{{ app_root }}/.secrets"
+        mode: "0600"
+
+    - name: Validar credenciales de GHCR en .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        # GHCR creds opcionales: si faltan, se intentará pull público
+        if [ -z "${GHCR_USERNAME:-}" ] || [ -z "${GHCR_TOKEN:-}" ]; then
+          echo "Aviso: GHCR_USERNAME/GHCR_TOKEN no definidos; se asume imagen pública" >&2
+        fi
+      args:
+        chdir: "{{ remedios_src }}"
+        executable: /bin/bash
+
+    - name: Crear namespace remedios si no existe
+      shell: |
+        kubectl --kubeconfig={{ kubeconfig }} get ns remedios >/dev/null 2>&1 || \
+        kubectl --kubeconfig={{ kubeconfig }} create ns remedios
+      changed_when: false
+
+    - name: Crear/actualizar secret remedios-secrets desde .secrets
+      shell: |
+        kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
+          --from-env-file={{ app_root }}/.secrets \
+          -n remedios \
+          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+
+    - name: Crear/actualizar pull secret ghcr-creds para GHCR (si hay credenciales)
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        if [ -z "${GHCR_USERNAME:-}" ] || [ -z "${GHCR_TOKEN:-}" ]; then
+          exit 0
+        fi
+        kubectl --kubeconfig={{ kubeconfig }} create secret docker-registry ghcr-creds \
+          --docker-server=ghcr.io \
+          --docker-username="$GHCR_USERNAME" \
+          --docker-password="$GHCR_TOKEN" \
+          -n remedios \
+          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+
+    - name: Aplicar manifiesto de remetext
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/remetext.yaml
+
+    - name: Reiniciar deployment remetext para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remetext -n remedios
+      register: restart_out
+      changed_when: "'restarted' in restart_out.stdout or restart_out.rc == 0"
+
+    - name: Esperar rollout de remetext
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remetext -n remedios

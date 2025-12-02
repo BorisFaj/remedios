@@ -35,6 +35,17 @@
         dest: "{{ remedios_dir }}/master-init.sh"
         mode: "0755"
 
+    - name: Copiar manifiestos necesarios
+      copy:
+        src: "../{{ item }}"
+        dest: "{{ remedios_dir }}/{{ item }}"
+        mode: "0644"
+      loop:
+        - traefik-acme.yaml
+        - kafka.yaml
+        - remedios.yaml
+        - whatsapp-consumer.yaml
+
     - name: Copiar .secrets del master desde el controlador
       copy:
         src: "{{ secrets_src }}"
@@ -54,6 +65,15 @@
     - name: Guardar IP tailscale en hostvars
       set_fact:
         master_tailscale_ip: "{{ tailscale_ip.stdout_lines[0] }}"
+
+    - name: Obtener MagicDNS del master
+      command: tailscale status --json
+      register: tailscale_status
+      changed_when: false
+
+    - name: Guardar MagicDNS en hostvars
+      set_fact:
+        master_tailscale_host: "{{ (tailscale_status.stdout | from_json).Self.DNSName | default('') | regex_replace('\\.$','') }}"
 
     - name: Leer token de k3s
       slurp:
@@ -99,11 +119,27 @@
 
     - name: Guardar IP tailscale del master
       set_fact:
-        master_tailscale_ip: "{{ master_ts_ip_cmd.stdout_lines[0] }}"
+        master_tailscale_ip: "{{ hostvars[master_host].master_tailscale_ip | default(master_ts_ip_cmd.stdout_lines[0] if master_ts_ip_cmd is defined else '') }}"
       delegate_to: "{{ master_host }}"
       delegate_facts: true
       run_once: true
       when: master_ts_ip_cmd is defined
+
+    - name: Obtener MagicDNS del master (si no existe)
+      command: tailscale status --json
+      register: master_ts_status
+      delegate_to: "{{ master_host }}"
+      run_once: true
+      when: hostvars[master_host].master_tailscale_host is not defined
+      changed_when: false
+
+    - name: Guardar MagicDNS del master
+      set_fact:
+        master_tailscale_host: "{{ hostvars[master_host].master_tailscale_host | default((master_ts_status.stdout | from_json).Self.DNSName | default('') | regex_replace('\\.$','')) }}"
+      delegate_to: "{{ master_host }}"
+      delegate_facts: true
+      run_once: true
+      when: master_ts_status is defined
 
     - name: Obtener token de k3s del master (si no existe)
       slurp:
@@ -115,11 +151,11 @@
 
     - name: Guardar token de k3s del master
       set_fact:
-        k3s_token: "{{ master_token_raw.content | b64decode | trim }}"
+        k3s_token: "{{ hostvars[master_host].k3s_token | default((master_token_raw.content | b64decode | trim) if (master_token_raw is defined and master_token_raw.content is defined) else '') }}"
       delegate_to: "{{ master_host }}"
       delegate_facts: true
       run_once: true
-      when: master_token_raw is defined
+      when: hostvars[master_host].k3s_token is not defined or (master_token_raw is defined and master_token_raw.content is defined)
 
     - name: Crear carpeta de trabajo
       file:
@@ -144,6 +180,13 @@
         path: "{{ remedios_dir }}/.secrets"
         regexp: '^MASTER_TAILSCALE_IP='
         line: "MASTER_TAILSCALE_IP={{ hostvars[master_host].master_tailscale_ip }}"
+
+    - name: Inyectar MASTER_TAILSCALE_HOST (MagicDNS)
+      lineinfile:
+        path: "{{ remedios_dir }}/.secrets"
+        regexp: '^MASTER_TAILSCALE_HOST='
+        line: "MASTER_TAILSCALE_HOST={{ hostvars[master_host].master_tailscale_host }}"
+      when: hostvars[master_host].master_tailscale_host is defined and hostvars[master_host].master_tailscale_host|length > 0
 
     - name: Inyectar K3S_TOKEN
       lineinfile:
