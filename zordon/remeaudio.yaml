@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: remeaudio-config
+  namespace: remedios
+data:
+  KAFKA_TOPIC: "whatsapp-audio"
+  KAFKA_GROUP_ID: "remeaudio"
+  # Usa un modelo más pequeño si no hay recursos: openai/whisper-small/base/tiny
+#  WHISPER_MODEL: "openai/whisper-small"
+  WHISPER_MODEL: "Boritsuki/whisperL-v3-turbo"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remeaudio
+  namespace: remedios
+  labels:
+    app: remeaudio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: remeaudio
+  template:
+    metadata:
+      labels:
+        app: remeaudio
+    spec:
+      imagePullSecrets:
+      - name: ghcr-creds
+      containers:
+      - name: remeaudio
+        image: ghcr.io/borisfaj/remeaudio:latest
+        imagePullPolicy: Always
+        command: ["/remedios/.venv/bin/python", "-m", "remeaudio_service"]
+        envFrom:
+        - configMapRef:
+            name: remedios-config
+        - configMapRef:
+            name: remeaudio-config
+        - secretRef:
+            name: remedios-secrets
+        env:
+        - name: WHISPER_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: remeaudio-config
+              key: WHISPER_MODEL
+        ports:
+        - containerPort: 8001
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "3Gi"
+          limits:
+            cpu: "2000m"
+            memory: "5Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: remeaudio
+  namespace: remedios
+spec:
+  selector:
+    app: remeaudio
+  ports:
+  - port: 8001
+    targetPort: 8001

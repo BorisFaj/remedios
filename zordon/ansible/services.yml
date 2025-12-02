@@ -9,6 +9,8 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
+    whisper_model: "{{ lookup('env','WHISPER_MODEL') | default('openai/whisper-small', true) }}"
+    remeaudio_manifest: "{{ app_root }}/remeaudio.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -50,6 +52,14 @@
         src: ../remetext.yaml
         dest: "{{ app_root }}/remetext.yaml"
         mode: "0644"
+      when: (deploy_remetext | default(true) | bool) == true
+
+    - name: Copiar manifiesto de remeaudio
+      copy:
+        src: ../remeaudio.yaml
+        dest: "{{ remeaudio_manifest }}"
+        mode: "0644"
+      when: (deploy_remeaudio | default(true) | bool) == true
 
     - name: Copiar .secrets al master
       copy:
@@ -100,11 +110,28 @@
 
     - name: Aplicar manifiesto de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/remetext.yaml
+      when: (deploy_remetext | default(true) | bool) == true
 
     - name: Reiniciar deployment remetext para coger cambios
       command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remetext -n remedios
       register: restart_out
       changed_when: "'restarted' in restart_out.stdout or restart_out.rc == 0"
+      when: (deploy_remetext | default(true) | bool) == true
 
     - name: Esperar rollout de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remetext -n remedios
+      when: (deploy_remetext | default(true) | bool) == true
+
+    - name: Aplicar manifiesto de remeaudio
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ remeaudio_manifest }}
+      when: (deploy_remeaudio | default(true) | bool) == true
+
+    - name: Reiniciar deployment remeaudio para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remeaudio -n remedios
+      register: restart_audio
+      changed_when: "'restarted' in restart_audio.stdout or restart_audio.rc == 0"
+      when: (deploy_remeaudio | default(true) | bool) == true
+
+    - name: Esperar rollout de remeaudio
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remeaudio -n remedios
+      when: (deploy_remeaudio | default(true) | bool) == true
