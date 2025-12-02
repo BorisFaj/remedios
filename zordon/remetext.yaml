@@ -29,7 +29,7 @@ spec:
       containers:
       - name: remetext
         image: ghcr.io/borisfaj/remetext:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command: ["/remedios/.venv/bin/python", "-m", "remetext_service"]
         envFrom:
         - configMapRef:
