@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Cargar variables desde .secrets (en la raíz del repo)
-SECRETS_PATH="$(dirname "$0")/../.secrets"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="${SCRIPT_DIR}/.."
+
+# Cargar variables desde .secrets (en infra/.secrets)
+SECRETS_PATH="${REPO_ROOT}/infra/.secrets"
 source "$SECRETS_PATH"
 
 FORCE_BUILD=false
@@ -12,13 +15,13 @@ for arg in "$@"; do
     FORCE_BUILD=true
   elif [[ "$arg" == "texto" ]]; then
     echo "📦 Ejecutando servicio 'texto' con docker-compose..."
-    docker compose -f docker-compose.yml up -d
+    docker compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d
     exit 0
   elif [[ "$arg" == "audio" ]]; then
     IMAGE_NAME="reme-audio"
     KAFKA_TOPIC="whatsapp-audio"
     KAFKA_GROUP_ID="audio"
-    BUILD_FILE="Dockerfile_audio"
+    BUILD_FILE="${REPO_ROOT}/apps/remeaudio/Dockerfile"
     CONTAINER_NAME="remedios-audio"
   else
     echo "❌ Argumento no reconocido: $arg"
@@ -31,7 +34,7 @@ done
 if [[ -n "$IMAGE_NAME" ]]; then
   if [[ "$FORCE_BUILD" == true || "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
     echo "🔧 Construyendo imagen '$IMAGE_NAME' usando '$BUILD_FILE'..."
-    docker build -t $IMAGE_NAME . -f "$BUILD_FILE" --no-cache --progress=plain
+    docker build -t $IMAGE_NAME "$REPO_ROOT" -f "$BUILD_FILE" --no-cache --progress=plain
   else
     echo "✅ Imagen '$IMAGE_NAME' ya existe. Usa --build para forzar reconstrucción."
   fi

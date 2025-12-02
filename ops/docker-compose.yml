@@ -20,18 +20,18 @@ services:
   remedios:
     image: reme-texto
     build:
-      context: .
-      dockerfile: Dockerfile_text
+      context: ..
+      dockerfile: apps/remetext/Dockerfile
     container_name: remedios-texto
     depends_on:
       - llama
     env_file:
-      - ../.secrets
+      - ../infra/.secrets
     environment:
       - KAFKA_TOPIC=whatsapp-text
       - KAFKA_GROUP_ID=text
       - LLAMA_API=http://llama:8000
     command: >
-      /remedios/.venv/bin/python -m super_consumer
+      /remedios/.venv/bin/python -m apps.consumer.super_consumer
     dns:
       - 8.8.8.8

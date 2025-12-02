@@ -6,7 +6,7 @@
   vars:
     app_root: /opt/remedios
     src_dir: "{{ app_root }}/src"
-    remedios_src: "{{ src_dir }}/remedios"
+    remedios_src: "{{ src_dir }}"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
   tasks:
@@ -37,7 +37,7 @@
 
     - name: Sincronizar código de remedios al master
       synchronize:
-        src: "{{ playbook_dir }}/../../remedios/"
+        src: "{{ playbook_dir }}/../.."
         dest: "{{ remedios_src }}/"
         delete: no
         rsync_opts:
@@ -47,7 +47,7 @@
 
     - name: Copiar manifiesto de remetext
       copy:
-        src: ../remetext.yaml
+        src: ../k8s/remetext.yaml
         dest: "{{ app_root }}/remetext.yaml"
         mode: "0644"
 

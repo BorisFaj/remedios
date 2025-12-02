@@ -3,17 +3,24 @@ set -euo pipefail
 
 echo "== Bootstrapping worker node =="
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SECRETS_PATH="${SCRIPT_DIR}/.secrets"
+
+if [ ! -f "$SECRETS_PATH" ] && [ -f "${SCRIPT_DIR}/../.secrets" ]; then
+  SECRETS_PATH="${SCRIPT_DIR}/../.secrets"
+fi
+
 # ==== 0. Precondiciones ====
 
-if [ ! -f .secrets ]; then
-  echo "ERROR: .secrets no encontrado"
+if [ ! -f "$SECRETS_PATH" ]; then
+  echo "ERROR: .secrets no encontrado en ${SECRETS_PATH}"
   exit 1
 fi
 
 # ==== 1. Cargar variables ====
 
 set -a
-. .secrets
+. "$SECRETS_PATH"
 set +a
 
 if [ -z "${TAILSCALE_AUTHKEY:-}" ]; then

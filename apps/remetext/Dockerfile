@@ -10,16 +10,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copiar solo requirements para aprovechar cache
 WORKDIR /remedios
-COPY requirements.txt requirements_text.txt ./
+COPY apps/remetext/requirements.txt ./apps/remetext/requirements.txt
 
 # Crear entorno virtual e instalar deps
 RUN python3 -m venv $POETRY_VENV \
     && $POETRY_VENV/bin/pip install --upgrade pip setuptools \
-    && $POETRY_VENV/bin/pip install --no-cache-dir -r requirements.txt \
-    && $POETRY_VENV/bin/pip install --no-cache-dir -r requirements_text.txt
+    && $POETRY_VENV/bin/pip install --no-cache-dir -r apps/remetext/requirements.txt
 
 # Copiar código
-COPY . .
+COPY apps ./apps
 
 # Ejecutar
-CMD ["/remedios/.venv/bin/python", "-m", "remetext_service"]
+CMD ["/remedios/.venv/bin/python", "-m", "apps.remetext.service"]

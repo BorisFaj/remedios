@@ -31,13 +31,13 @@
 
     - name: Copiar script master-init.sh
       copy:
-        src: ../master-init.sh
+        src: ../scripts/master-init.sh
         dest: "{{ remedios_dir }}/master-init.sh"
         mode: "0755"
 
     - name: Copiar manifiestos necesarios
       copy:
-        src: "../{{ item }}"
+        src: "../k8s/{{ item }}"
         dest: "{{ remedios_dir }}/{{ item }}"
         mode: "0644"
       loop:
@@ -165,7 +165,7 @@
 
     - name: Copiar script node-init.sh
       copy:
-        src: ../node-init.sh
+        src: ../scripts/node-init.sh
         dest: "{{ remedios_dir }}/node-init.sh"
         mode: "0755"
 

@@ -3,17 +3,29 @@ set -euo pipefail
 
 echo "== Bootstrapping master node =="
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ASSETS_DIR="${SCRIPT_DIR}"
+SECRETS_PATH="${SCRIPT_DIR}/.secrets"
+
+if [ ! -f "${ASSETS_DIR}/remedios.yaml" ] && [ -f "${SCRIPT_DIR}/../k8s/remedios.yaml" ]; then
+  ASSETS_DIR="${SCRIPT_DIR}/../k8s"
+fi
+
+if [ ! -f "$SECRETS_PATH" ] && [ -f "${SCRIPT_DIR}/../.secrets" ]; then
+  SECRETS_PATH="${SCRIPT_DIR}/../.secrets"
+fi
+
 # ==== 0. Precondiciones ====
 
-if [ ! -f .secrets ]; then
-  echo "ERROR: .secrets no encontrado"
+if [ ! -f "$SECRETS_PATH" ]; then
+  echo "ERROR: .secrets no encontrado en ${SECRETS_PATH}"
   exit 1
 fi
 
 # ==== 1. Cargar variables ====
 
 set -a
-. .secrets
+. "$SECRETS_PATH"
 set +a
 
 if [ -z "${DOMAIN:-}" ]; then
@@ -181,17 +193,17 @@ fi
 # ==== 9. Traefik + ACME (Let’s Encrypt) ====
 
 echo "Aplicando configuracion ACME para Traefik"
-sudo k3s kubectl apply -n kube-system -f traefik-acme.yaml
+sudo k3s kubectl apply -n kube-system -f "${ASSETS_DIR}/traefik-acme.yaml"
 
 # ==== 10. Aplicar kafka ====
 
 echo "Aplicando kafka.yaml"
-sudo k3s kubectl apply -f kafka.yaml
+sudo k3s kubectl apply -f "${ASSETS_DIR}/kafka.yaml"
 
 # ==== 11. Aplicar remedios.yaml con envsubst ====
 
 echo "Aplicando remedios.yaml con DOMAIN=$DOMAIN"
-envsubst < remedios.yaml > /tmp/remedios.rendered.yaml
+envsubst < "${ASSETS_DIR}/remedios.yaml" > /tmp/remedios.rendered.yaml
 sudo k3s kubectl apply -f /tmp/remedios.rendered.yaml
 
 

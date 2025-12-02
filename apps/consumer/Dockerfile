@@ -39,8 +39,10 @@ RUN poetry config virtualenvs.in-project true
 COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 
 # Dependencias remedios ANTES que torch-cuda
-RUN $POETRY_VENV/bin/pip install -r requirements.txt
+RUN $POETRY_VENV/bin/pip install -r apps/consumer/requirements.txt \
+    && $POETRY_VENV/bin/pip install -r apps/remetext/requirements.txt \
+    && $POETRY_VENV/bin/pip install -r apps/remeaudio/requirements.txt
 
 RUN $POETRY_VENV/bin/pip install torch==2.6.0+cu126 torchaudio==2.6.0+cu126 --index-url https://download.pytorch.org/whl/cu126
 
-CMD ["/remedios/.venv/bin/python", "-m", "super_consumer"]
+CMD ["/remedios/.venv/bin/python", "-m", "apps.consumer.super_consumer"]

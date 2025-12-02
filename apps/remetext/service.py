@@ -3,7 +3,7 @@ import sys
 
 from flask import Flask, jsonify, request
 
-import remetext
+from apps import remetext
 
 logging.basicConfig(
     level=logging.INFO,

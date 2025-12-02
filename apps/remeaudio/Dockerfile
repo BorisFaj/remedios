@@ -29,8 +29,8 @@ WORKDIR /remedios/
 COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 
 RUN poetry config virtualenvs.in-project true
-RUN $POETRY_VENV/bin/pip install -r requirements.txt
-RUN $POETRY_VENV/bin/pip install -r requirements_audio.txt
+RUN $POETRY_VENV/bin/pip install -r apps/consumer/requirements.txt \
+    && $POETRY_VENV/bin/pip install -r apps/remeaudio/requirements.txt
 RUN $POETRY_VENV/bin/pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 
-CMD ["/remedios/.venv/bin/python", "-m", "super_consumer"]
+CMD ["/remedios/.venv/bin/python", "-m", "apps.consumer.super_consumer"]

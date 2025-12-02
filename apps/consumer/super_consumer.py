@@ -16,8 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 running = True
 TOPIC_MODULES = {
-    "whatsapp-text": "remetext",
-    "whatsapp-audio": "remeaudio"
+    "whatsapp-text": "apps.remetext",
+    "whatsapp-audio": "apps.remeaudio",
 }
 
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC")
