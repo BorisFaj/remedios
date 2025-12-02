@@ -1,5 +1,5 @@
 from whatsapp import get_message, get_phone_number, send_text_answer
-from chat.llamacpp_server import ask
+from chat.fool import ask
 from log.sender import validate_message, get_embeddings_context
 import logging
 import sys

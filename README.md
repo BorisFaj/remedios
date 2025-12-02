@@ -59,6 +59,11 @@ Despliegue con Ansible (Tailscale automático)
   ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
   ```
 - El playbook copia los scripts, bootstrappea el master, obtiene automáticamente la IP/MagicDNS de tailscale y el `K3S_TOKEN`, y luego une los workers sin que tengas que pasar manualmente esos datos.
+- Playbook opcional para servicios: cuando el cluster ya está arriba, puedes construir y desplegar `remetext` con imagen local (sin tirar de registry) usando `zordon/ansible/services.yml`. Requisitos: kubeconfig en `/etc/rancher/k3s/k3s.yaml` en el master y `nerdctl` disponible. Ejemplo:
+  ```bash
+  ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml --limit master
+  ```
+  El playbook sincroniza `remedios/`, **asume que la imagen multi-arch ya está publicada** en `ghcr.io/borisfaj/remetext:latest` (se construye en CI), crea los Secrets (`remedios-secrets` con tus vars de `.secrets` y `ghcr-creds` si defines `GHCR_USERNAME`/`GHCR_TOKEN` para pulls privados), aplica `zordon/remetext.yaml` y fuerza un rollout del deployment `remetext` en el namespace `remedios`.
 - Casos de uso:
   - **Cluster de un solo nodo (solo master)**: define solo el host en `master` (o usa `--limit master`). No es necesario declarar `nodes`.
   - **Cluster nuevo con varios nodos**: define `master` + `nodes` y ejecuta el playbook completo (sin `--limit`).
