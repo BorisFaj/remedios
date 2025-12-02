@@ -9,6 +9,7 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
+    remeaudio_manifest: "{{ app_root }}/remeaudio.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -49,6 +50,12 @@
       copy:
         src: ../remetext.yaml
         dest: "{{ app_root }}/remetext.yaml"
+        mode: "0644"
+
+    - name: Copiar manifiesto de remeaudio
+      copy:
+        src: ../remeaudio.yaml
+        dest: "{{ remeaudio_manifest }}"
         mode: "0644"
 
     - name: Copiar .secrets al master
@@ -108,3 +115,14 @@
 
     - name: Esperar rollout de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remetext -n remedios
+
+    - name: Aplicar manifiesto de remeaudio
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ remeaudio_manifest }}
+
+    - name: Reiniciar deployment remeaudio para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remeaudio -n remedios
+      register: restart_audio
+      changed_when: "'restarted' in restart_audio.stdout or restart_audio.rc == 0"
+
+    - name: Esperar rollout de remeaudio
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remeaudio -n remedios
