@@ -151,11 +151,11 @@
 
     - name: Guardar token de k3s del master
       set_fact:
-        k3s_token: "{{ master_token_raw.content | b64decode | trim }}"
+        k3s_token: "{{ hostvars[master_host].k3s_token | default((master_token_raw.content | b64decode | trim) if (master_token_raw is defined and master_token_raw.content is defined) else '') }}"
       delegate_to: "{{ master_host }}"
       delegate_facts: true
       run_once: true
-      when: master_token_raw is defined
+      when: hostvars[master_host].k3s_token is not defined or (master_token_raw is defined and master_token_raw.content is defined)
 
     - name: Crear carpeta de trabajo
       file:
