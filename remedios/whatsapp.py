@@ -22,6 +22,20 @@ GRAPH_URL = os.environ.get("GRAPH_URL")
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 
 
+def _post_graph(url: str, payload: dict) -> requests.Response:
+    """Envia un POST a Graph y loguea cualquier error HTTP o de conexión."""
+    try:
+        resp = requests.post(url, headers=__HEADERS, json=payload, timeout=10)
+        if resp.status_code >= 400:
+            logger.error(
+                "Graph POST %s failed status=%s body=%s", url, resp.status_code, resp.text
+            )
+        return resp
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.error("Graph POST %s failed: %s", url, exc)
+        raise
+
+
 def get_message(request: dict) -> dict:
     return (
         request.get("entry", [{}])[0]
@@ -43,6 +57,10 @@ def get_phone_number(request: dict) -> int:
 
 def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -> None:
 
+    if not GRAPH_API_TOKEN or not GRAPH_URL:
+        logger.error("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta")
+        return
+
     # Envia una respuesta
     response_data = {
         "messaging_product": "whatsapp",
@@ -51,12 +69,7 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
         "context": {"message_id": message_id},
     }
 
-    # Envia el mensaje de respuesta
-    requests.post(
-         "{}/{}/messages".format(GRAPH_URL, phone_number),
-         headers=__HEADERS,
-         json=response_data,
-    )
+    _post_graph(f"{GRAPH_URL}/{phone_number}/messages", response_data)
 
     # Marca el mensaje como leido
     mark_read_data = {
@@ -64,11 +77,7 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
         "status": "read",
         "message_id": message_id,
     }
-    requests.post(
-        "{}/{}/messages".format(GRAPH_URL, phone_number),
-        headers=__HEADERS,
-        json=mark_read_data,
-    )
+    _post_graph(f"{GRAPH_URL}/{phone_number}/messages", mark_read_data)
 
 def extract_audio(message: dict, phone_number: int) -> BytesIO:
     audio_id = message["audio"]["id"]
