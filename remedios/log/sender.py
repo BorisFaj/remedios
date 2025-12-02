@@ -14,15 +14,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configurar la conexión a la base de datos
-DATABASE_URL = f"postgresql://{os.getenv('DB_URL')}"
-engine = create_engine(DATABASE_URL)
-
-# Crear sesión de base de datos
-SessionLocal = sessionmaker(bind=engine)
-session = SessionLocal()
-
-Base = declarative_base()
+# Configurar la conexión a la base de datos (opcional)
+DB_URL = os.getenv("DB_URL")
+if DB_URL:
+    DATABASE_URL = f"postgresql://{DB_URL}"
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    Base = declarative_base()
+else:
+    logger.warning("DB_URL no definida; logging a DB deshabilitado")
+    engine = None
+    SessionLocal = None
+    session = None
+    Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
@@ -44,7 +49,8 @@ class Message(Base):
     sender = relationship("User", back_populates="messages_sent")
 
 # Crear las tablas en la base de datos (si no existen)
-Base.metadata.create_all(engine)
+if engine:
+    Base.metadata.create_all(engine)
 
 
 class LogGolismeo(LogBase):
@@ -55,6 +61,8 @@ class LogGolismeo(LogBase):
 
 def check_user(phone_number):
     """Guarda un usuario si no existe en la base de datos."""
+    if not session:
+        return
     try:
         user = session.query(User).filter_by(phone=phone_number).first()
         if not user:
@@ -70,6 +78,8 @@ def check_user(phone_number):
 
 def validate_message(sender, receiver, message, message_type="text"):
     """Guarda un mensaje en la base de datos."""
+    if not session:
+        return
     check_user(sender)  # Registrar el usuario si no existe
     check_user(receiver)  # Registrar el receptor si no existe
 
@@ -89,6 +99,8 @@ def validate_message(sender, receiver, message, message_type="text"):
 
 def __get_last_text_messages(phone_number, n=10):
     """Devuelve los últimos N mensajes de texto enviados o recibidos por un usuario."""
+    if not session:
+        return []
     try:
         messages = session.query(Message).filter(
             (Message.sender_phone == phone_number) | (Message.receiver_phone == phone_number),
@@ -119,4 +131,3 @@ def get_embeddings_context(phone_number, new_message, bot_name="Remedios", user_
     formatted_history.append(f"[{bot_name}]: ")
 
     return "\n".join(formatted_history)
-
