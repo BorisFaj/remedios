@@ -7,7 +7,8 @@ data:
   KAFKA_TOPIC: "whatsapp-audio"
   KAFKA_GROUP_ID: "remeaudio"
   # Usa un modelo más pequeño si no hay recursos: openai/whisper-small/base/tiny
-  WHISPER_MODEL: "openai/whisper-small"
+#  WHISPER_MODEL: "openai/whisper-small"
+  WHISPER_MODEL: "Boritsuki/whisperL-v3-turbo"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -51,10 +52,10 @@ spec:
         resources:
           requests:
             cpu: "500m"
-            memory: "1Gi"
+            memory: "3Gi"
           limits:
-            cpu: "1000m"
-            memory: "2Gi"
+            cpu: "2000m"
+            memory: "5Gi"
 ---
 apiVersion: v1
 kind: Service

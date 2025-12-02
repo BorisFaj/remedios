@@ -9,6 +9,7 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
+    whisper_model: "{{ lookup('env','WHISPER_MODEL') | default('openai/whisper-small', true) }}"
     remeaudio_manifest: "{{ app_root }}/remeaudio.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
