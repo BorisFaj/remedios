@@ -32,6 +32,8 @@ spec:
       labels:
         app: remedios
     spec:
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: remedios
           image: ghcr.io/borisfaj/remedios:latest
