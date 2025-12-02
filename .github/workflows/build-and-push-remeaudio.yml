@@ -16,7 +16,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remeaudio
-  DOCKERFILE: ./remedios/Dockerfile_audio
+  DOCKERFILE: ./remedios/Dockerfile_audio.cuda
   CONTEXT: ./remedios
 
 jobs:
