@@ -31,7 +31,7 @@ spec:
       containers:
       - name: remeaudio
         image: ghcr.io/borisfaj/remeaudio:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command: ["/remedios/.venv/bin/python", "-m", "remeaudio_service"]
         envFrom:
         - configMapRef:
