@@ -6,7 +6,7 @@ metadata:
 data:
   TEXT_TOPIC: "whatsapp-text"
   AUDIO_TOPIC: "whatsapp-audio"
-  TEXT_ENDPOINT: "http://localhost:8000/process"
+  TEXT_ENDPOINT: "http://remetext.remedios.svc.cluster.local:8000/process"
   AUDIO_ENDPOINT: "http://localhost:8001/process"
 ---
 apiVersion: apps/v1
