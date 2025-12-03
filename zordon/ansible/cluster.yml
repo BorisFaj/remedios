@@ -37,7 +37,7 @@
 
     - name: Copiar manifiestos necesarios
       copy:
-        src: "../{{ item }}"
+        src: "../deploy/{{ item }}"
         dest: "{{ remedios_dir }}/{{ item }}"
         mode: "0644"
       loop:
