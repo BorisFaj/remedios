@@ -31,7 +31,7 @@
 
     - name: Copiar script master-init.sh
       copy:
-        src: ../master-init.sh
+        src: master-init.sh
         dest: "{{ remedios_dir }}/master-init.sh"
         mode: "0755"
 
@@ -165,7 +165,7 @@
 
     - name: Copiar script node-init.sh
       copy:
-        src: ../node-init.sh
+        src: node-init.sh
         dest: "{{ remedios_dir }}/node-init.sh"
         mode: "0755"
 

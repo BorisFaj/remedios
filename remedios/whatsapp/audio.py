@@ -1,4 +1,4 @@
-from handler import get_message, get_phone_number, send_text_answer, extract_audio
+from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer, extract_audio
 from remedios.commons.stt.whisper import transcribe
 from remedios.commons.log.sender import validate_message
 import logging
