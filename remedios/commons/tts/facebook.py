@@ -1,7 +1,7 @@
 from transformers import VitsModel, AutoTokenizer
 import torch
 import numpy as np
-from remedios.tts.utils import wav_2_mp3
+from remedios.commons.tts.utils import wav_2_mp3
 
 model = VitsModel.from_pretrained("facebook/mms-stt-spa")
 tokenizer = AutoTokenizer.from_pretrained("facebook/mms-stt-spa")
