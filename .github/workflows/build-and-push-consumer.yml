@@ -5,7 +5,7 @@ on:
     branches: ["develop"]
     paths:
       - "zordon/whatsapp_consumer.py"
-      - "zordon/Dockerfile.consumer"
+      - "zordon/Dockerfile_consumer"
       - "zordon/consumer_requirements.txt"
       - ".github/workflows/build-and-push-consumer.yml"
 
@@ -17,7 +17,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remedios-consumer
-  DOCKERFILE: ./zordon/Dockerfile.consumer
+  DOCKERFILE: ./zordon/Dockerfile_consumer
   CONTEXT: ./zordon
 
 jobs:

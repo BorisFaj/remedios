@@ -26,7 +26,7 @@ Remedios es un sistema modular para integrar y procesar mensajes de WhatsApp.
 
 2. Instala las dependencias:
    ```sh
-   pip install -r requirements.txt
+   pip install -r server_requirements.txt
    ```
 
 3. Configura las variables de entorno.
