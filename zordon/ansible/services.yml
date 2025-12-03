@@ -10,7 +10,7 @@
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') | default('openai/whisper-small', true) }}"
-    remeaudio_manifest: "{{ app_root }}/remeaudio.yaml"
+    remeaudio_manifest: "{{ app_root }}/deploy/remeaudio.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -49,14 +49,14 @@
 
     - name: Copiar manifiesto de remetext
       copy:
-        src: ../remetext.yaml
-        dest: "{{ app_root }}/remetext.yaml"
+        src: ../deploy/remetext.yaml
+        dest: "{{ app_root }}/deploy/remetext.yaml"
         mode: "0644"
       when: (deploy_remetext | default(true) | bool) == true
 
     - name: Copiar manifiesto de remeaudio
       copy:
-        src: ../remeaudio.yaml
+        src: ../deploy/remeaudio.yaml
         dest: "{{ remeaudio_manifest }}"
         mode: "0644"
       when: (deploy_remeaudio | default(true) | bool) == true
@@ -109,7 +109,7 @@
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
 
     - name: Aplicar manifiesto de remetext
-      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/remetext.yaml
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remetext.yaml
       when: (deploy_remetext | default(true) | bool) == true
 
     - name: Reiniciar deployment remetext para coger cambios
