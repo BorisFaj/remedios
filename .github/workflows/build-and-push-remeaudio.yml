@@ -5,7 +5,7 @@ on:
     branches: ["develop"]
     paths:
       - "remedios/**"
-      - "zordon/remeaudio.yaml"
+      - "zordon/deploy/remeaudio.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
 
 permissions:
@@ -16,7 +16,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remeaudio
-  DOCKERFILE: ./remedios/Dockerfile_audio
+  DOCKERFILE: ./remedios/apis/Dockerfile_audio
   CONTEXT: ./remedios
 
 jobs:
