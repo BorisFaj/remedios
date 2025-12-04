@@ -30,7 +30,7 @@ spec:
       - name: remetext
         image: ghcr.io/borisfaj/remetext:latest
         imagePullPolicy: Always
-        command: ["/app/remedios/.venv/bin/python", "-m", "remetext_service"]
+        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.text_service"]
         envFrom:
         - configMapRef:
             name: remedios-config
