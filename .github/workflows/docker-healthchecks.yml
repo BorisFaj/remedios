@@ -50,6 +50,7 @@ jobs:
         run: |
           env_args=""
           while IFS= read -r line; do
+            line=$(echo "$line" | xargs)
             [ -z "$line" ] && continue
             env_args="$env_args -e $line"
           done <<< "${{ matrix.env }}"
