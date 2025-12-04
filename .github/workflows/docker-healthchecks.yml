@@ -48,9 +48,14 @@ jobs:
 
       - name: Run ${{ matrix.name }}
         run: |
+          env_args=""
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            env_args="$env_args -e $line"
+          done <<< "${{ matrix.env }}"
           docker run -d --rm --name ${{ matrix.name }} \
             -p ${{ matrix.port }}:${{ matrix.port }} \
-            ${{ matrix.env }} \
+            $env_args \
             test-${{ matrix.name }}
 
       - name: Wait for health ${{ matrix.name }}
