@@ -2,11 +2,11 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY core/consumer_requirements.txt .
+COPY core/consumer_requirements.txt /app/
 RUN pip install --no-cache-dir -r consumer_requirements.txt
 
-COPY core/whatsapp_consumer.py .
+COPY core/whatsapp_consumer.py /app/
 
 EXPOSE 8080
 
-CMD ["python", "whatsapp_consumer.py"]
+CMD ["python", "/app/whatsapp_consumer.py"]
