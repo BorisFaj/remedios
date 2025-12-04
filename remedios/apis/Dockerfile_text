@@ -1,5 +1,6 @@
 FROM python:3.10-slim
 
+ARG APP_SRC=.
 ENV POETRY_VENV=/app/remedios/.venv
 ENV PYTHONPATH=/app
 
@@ -9,9 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar solo requirements para aprovechar cache (contexto ./remedios)
+# Copiar solo requirements para aprovechar cache
 WORKDIR /app
-COPY apis/requirements.txt apis/requirements_text.txt ./remedios/
+COPY ${APP_SRC}/apis/requirements.txt ${APP_SRC}/apis/requirements_text.txt ./remedios/
 
 # Crear entorno virtual e instalar deps
 RUN python3 -m venv $POETRY_VENV \
@@ -20,7 +21,7 @@ RUN python3 -m venv $POETRY_VENV \
     && $POETRY_VENV/bin/pip install --no-cache-dir -r remedios/requirements_text.txt
 
 # Copiar código
-COPY . /app/remedios
+COPY ${APP_SRC}/ /app/remedios
 
 WORKDIR /app
 
