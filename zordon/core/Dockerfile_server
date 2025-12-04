@@ -2,10 +2,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY zordon/core/server_requirements.txt .
+COPY server_requirements.txt .
 RUN pip install --no-cache-dir -r server_requirements.txt
 
-COPY zordon/core/server.py .
+COPY server.py .
 
 EXPOSE 3000
 
