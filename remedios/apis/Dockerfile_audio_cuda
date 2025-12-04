@@ -5,8 +5,6 @@ ARG APP_SRC=.
 ENV PYTHON_VERSION=3.10
 
 ENV POETRY_VENV=/app/remedios/.venv
-ENV PIP_NO_BINARY=whispercpp
-ENV PIP_PREFER_BINARY=0
 ENV PYTHONPATH=/app
 
 RUN export DEBIAN_FRONTEND=noninteractive \
@@ -41,8 +39,8 @@ RUN poetry config virtualenvs.in-project true
 RUN $POETRY_VENV/bin/pip install -r requirements.txt
 RUN $POETRY_VENV/bin/pip install -r requirements_audio.txt
 RUN $POETRY_VENV/bin/pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
-
-# Instalar whispercpp desde PyPI pero forzando build desde fuente (sin wheels)
-RUN PIP_NO_BINARY=:all: $POETRY_VENV/bin/pip install --no-cache-dir --no-binary :all: whispercpp
+RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
+    && cd /tmp/whisper.cpp/bindings/python \
+    && $POETRY_VENV/bin/pip install --no-cache-dir .
 
 CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
