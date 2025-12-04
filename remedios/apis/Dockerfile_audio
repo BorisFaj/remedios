@@ -26,9 +26,8 @@ RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt \
     && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt
 
-# Instalar whispercpp desde tarball (fuente) sin binarios precompilados
-RUN PIP_NO_BINARY=:all: /app/remedios/.venv/bin/pip install --no-cache-dir --no-binary :all: \
-    https://github.com/stlukey/whispercpp/archive/refs/heads/master.zip
+# Instalar whispercpp desde PyPI pero forzando build desde fuente (sin wheels)
+RUN PIP_NO_BINARY=:all: /app/remedios/.venv/bin/pip install --no-cache-dir --no-binary :all: whispercpp
 
 # Copiar código de la app conservando la ruta del paquete
 COPY ${APP_SRC}/ /app/remedios
