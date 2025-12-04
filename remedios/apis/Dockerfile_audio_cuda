@@ -39,8 +39,7 @@ RUN poetry config virtualenvs.in-project true
 RUN $POETRY_VENV/bin/pip install -r requirements.txt
 RUN $POETRY_VENV/bin/pip install -r requirements_audio.txt
 RUN $POETRY_VENV/bin/pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
-RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
-    && cd /tmp/whisper.cpp/bindings/python \
-    && $POETRY_VENV/bin/pip install --no-cache-dir .
+RUN $POETRY_VENV/bin/pip install --no-cache-dir --no-binary :all: \
+    https://github.com/ggml-org/whisper.cpp/archive/refs/heads/master.zip#subdirectory=bindings/python
 
 CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
