@@ -1,4 +1,4 @@
-name: Build and Push (develop)
+name: Build and Push Server
 
 on:
   push:

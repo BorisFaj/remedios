@@ -6,18 +6,24 @@ from typing import Iterable, Union
 
 import ffmpeg
 from huggingface_hub import hf_hub_download
-from whispercpp import Whisper, api as whisper_api
 
 logger = logging.getLogger(__name__)
 
-# Ruta del modelo gguf para whisper.cpp (puede apuntar a un volumen montado)
+WHISPER_FAKE = os.getenv("WHISPER_FAKE") == "1"
+
+if not WHISPER_FAKE:
+    from whispercpp import Whisper, api as whisper_api
+
+# Configuración de modelo
 WHISPER_MODEL_REPO = os.getenv("WHISPER_MODEL_REPO", "ggerganov/whisper.cpp")
 WHISPER_MODEL_FILE = os.getenv("WHISPER_MODEL_FILE", "ggml-large-v3-turbo-q5_0.bin")
 WHISPER_MODEL_PATH = os.getenv("WHISPER_MODEL", WHISPER_MODEL_FILE)
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "es")
 
+_whisper_model = None  # cache perezoso
 
-def _init_whisper_from_file(local_path: str) -> Whisper:
+
+def _init_whisper_from_file(local_path: str) -> "Whisper":
     """
     Crea una instancia de Whisper con un modelo custom (no limitado a MODELS_URL).
     Replica la lógica de from_pretrained pero usando un path local.
@@ -37,11 +43,7 @@ def _init_whisper_from_file(local_path: str) -> Whisper:
     return _ref
 
 
-def _load_model(model_path: str) -> Whisper:
-    """
-    Intenta cargar el modelo desde un path local. Si no existe, delega en la
-    resolución que haga la propia librería (por ejemplo aliases preconfigurados).
-    """
+def _load_model(model_path: str) -> "Whisper":
     if os.path.isfile(model_path):
         return _init_whisper_from_file(model_path)
     logger.warning("Modelo Whisper.cpp no encontrado en %s, se intentará resolverlo de forma automática", model_path)
@@ -53,41 +55,38 @@ def _load_model(model_path: str) -> Whisper:
     else:
         candidates.extend([f"{name}.bin", f"{name}.gguf"])
 
-    try:
-        last_exc = None
-        for candidate in candidates:
-            try:
-                local_path = hf_hub_download(
-                    repo_id=WHISPER_MODEL_REPO,
-                    filename=candidate,
-                    local_files_only=False,
-                )
-                return _init_whisper_from_file(local_path)
-            except Exception as exc:
-                last_exc = exc
-                logger.warning("No se pudo descargar %s/%s: %s", WHISPER_MODEL_REPO, candidate, exc)
-        if last_exc:
-            raise last_exc
-        raise RuntimeError("No se encontraron candidatos de modelo para whisper.cpp")
-    except Exception as exc:
-        logger.exception("No se pudo cargar el modelo Whisper.cpp: %s", exc)
-        raise
+    last_exc = None
+    for candidate in candidates:
+        try:
+            local_path = hf_hub_download(
+                repo_id=WHISPER_MODEL_REPO,
+                filename=candidate,
+                local_files_only=False,
+            )
+            return _init_whisper_from_file(local_path)
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("No se pudo descargar %s/%s: %s", WHISPER_MODEL_REPO, candidate, exc)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("No se encontraron candidatos de modelo para whisper.cpp")
 
 
-whisper_model = _load_model(WHISPER_MODEL_PATH)
+def _get_model() -> "Whisper":
+    global _whisper_model
+    if _whisper_model is None:
+        _whisper_model = _load_model(WHISPER_MODEL_PATH)
+    return _whisper_model
 
 
 def _to_wav_file(audio: Union[str, bytes, bytearray]) -> str:
     """Normaliza entrada (bytes/ruta) a un wav 16k mono temporal para whisper.cpp."""
-    # Si ya viene una ruta, se fuerza a wav para evitar problemas con codecs
-    audio_bytes: bytes
     if isinstance(audio, (bytes, bytearray)):
         audio_bytes = bytes(audio)
     elif isinstance(audio, str):
         with open(audio, "rb") as src:
             audio_bytes = src.read()
     else:
-        # BytesIO u objetos similares con .read()
         audio_bytes = audio.read()
 
     if not audio_bytes:
@@ -125,9 +124,13 @@ def _collect_text(segments: Union[str, Iterable]) -> str:
 
 
 def transcribe(audio: Union[str, bytes, bytearray]) -> str:
+    if WHISPER_FAKE:
+        return "transcription-disabled"
+
     wav_path = _to_wav_file(audio)
     try:
-        return whisper_model.transcribe_from_file(wav_path)
+        model = _get_model()
+        return model.transcribe_from_file(wav_path)
     finally:
         try:
             os.unlink(wav_path)

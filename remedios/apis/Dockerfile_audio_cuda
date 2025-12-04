@@ -3,12 +3,15 @@ FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
 ENV PYTHON_VERSION=3.10
 
-ENV POETRY_VENV=/remedios/.venv
+ENV POETRY_VENV=/app/remedios/.venv
 ENV PIP_NO_BINARY=whispercpp
+ENV PYTHONPATH=/app
 
 RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get -qq update \
     && apt-get -qq install --no-install-recommends \
+    build-essential \
+    cmake \
     python${PYTHON_VERSION} \
     python${PYTHON_VERSION}-venv \
     python3-pip \
@@ -24,10 +27,12 @@ RUN python3 -m venv $POETRY_VENV \
 
 ENV PATH="${PATH}:${POETRY_VENV}/bin"
 
-COPY . /remedios
-WORKDIR /remedios/
-
+WORKDIR /app
 COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
+
+COPY . /app/remedios
+
+WORKDIR /app
 
 RUN poetry config virtualenvs.in-project true
 RUN $POETRY_VENV/bin/pip install -r requirements.txt
@@ -35,4 +40,4 @@ RUN $POETRY_VENV/bin/pip install -r requirements_audio.txt
 RUN $POETRY_VENV/bin/pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 RUN PIP_NO_BINARY=whispercpp $POETRY_VENV/bin/pip install --force-reinstall --no-cache-dir --no-binary whispercpp whispercpp
 
-CMD ["/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
+CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]

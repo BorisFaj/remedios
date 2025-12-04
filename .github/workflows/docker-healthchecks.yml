@@ -1,0 +1,88 @@
+name: Docker Healthchecks
+
+on:
+  pull_request:
+    branches: ["develop"]
+    paths:
+      - "remedios/**"
+      - ".github/workflows/docker-healthchecks.yml"
+  push:
+    branches: ["develop"]
+    paths:
+      - "remedios/**"
+      - ".github/workflows/docker-healthchecks.yml"
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: remeaudio
+            context: remedios
+            dockerfile: remedios/apis/Dockerfile_audio
+            port: 8001
+            health: /health
+            env: >
+              GRAPH_API_TOKEN=dummy
+              GRAPH_URL=https://example.com
+              WHISPER_MODEL=ggml-tiny.en.bin
+              WHISPER_MODEL_REPO=ggerganov/whisper.cpp
+              WHISPER_FAKE=1
+          - name: remetext
+            context: remedios
+            dockerfile: remedios/apis/Dockerfile_text
+            port: 8000
+            health: /health
+            env: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.name }}
+        run: |
+          docker build -t test-${{ matrix.name }} \
+            -f ${{ matrix.dockerfile }} \
+            ${{ matrix.context }}
+
+      - name: Run ${{ matrix.name }}
+        run: |
+          env_list=()
+          while IFS= read -r line; do
+            line=$(echo "$line" | xargs)
+            [ -z "$line" ] && continue
+            env_list+=("-e" "$line")
+          done <<< "${{ matrix.env }}"
+          docker run -d --name ${{ matrix.name }} \
+            -p ${{ matrix.port }}:${{ matrix.port }} \
+            "${env_list[@]}" \
+            test-${{ matrix.name }}
+
+      - name: Wait for health ${{ matrix.name }}
+        run: |
+          for i in {1..30}; do
+            if docker ps --format '{{.Names}}' | grep -q "^${{ matrix.name }}$"; then
+              if curl -fsS "http://localhost:${{ matrix.port }}${{ matrix.health }}" > /dev/null; then
+                exit 0
+              fi
+              sleep 5
+            else
+              echo "Container ${{ matrix.name }} is not running" >&2
+              docker ps -a
+              docker logs ${{ matrix.name }} || true
+              exit 1
+            fi
+          done
+          echo "Healthcheck failed for ${{ matrix.name }}" >&2
+          docker logs ${{ matrix.name }}
+          exit 1
+
+      - name: Logs ${{ matrix.name }}
+        if: always()
+        run: docker logs ${{ matrix.name }} || true
+
+      - name: Stop ${{ matrix.name }}
+        if: always()
+        run: docker rm -f ${{ matrix.name }} || true
