@@ -36,6 +36,7 @@
       loop:
         - "{{ app_root }}"
         - "{{ src_dir }}"
+        - "{{ app_root }}/deploy"
 
     - name: Sincronizar código de remedios al master
       synchronize:
