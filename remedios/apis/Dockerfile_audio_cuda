@@ -5,6 +5,7 @@ ENV PYTHON_VERSION=3.10
 
 ENV POETRY_VENV=/app/remedios/.venv
 ENV PIP_NO_BINARY=whispercpp
+ENV PYTHONPATH=/app
 
 RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get -qq update \
@@ -31,7 +32,7 @@ COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 
 COPY . /app/remedios
 
-WORKDIR /app/remedios
+WORKDIR /app
 
 RUN poetry config virtualenvs.in-project true
 RUN $POETRY_VENV/bin/pip install -r requirements.txt
