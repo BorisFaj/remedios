@@ -5,8 +5,37 @@ from pathlib import Path
 from typing import Iterable, Union
 
 import ffmpeg
+import subprocess
+import sys
 from huggingface_hub import hf_hub_download
-from whispercpp import Whisper, api as whisper_api
+
+
+def _import_whispercpp():
+    try:
+        from whispercpp import Whisper, api as whisper_api  # type: ignore
+        return Whisper, whisper_api
+    except Exception as exc:
+        if "invalid ELF header" not in str(exc):
+            raise
+        # Intento de recompilar en la arquitectura actual
+        reinstall_cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--force-reinstall",
+            "--no-cache-dir",
+            "--no-binary",
+            "whispercpp",
+            "whispercpp",
+        ]
+        logger.warning("whispercpp falló al importar (%s); reintentando instalación en runtime", exc)
+        subprocess.check_call(reinstall_cmd)
+        from whispercpp import Whisper, api as whisper_api  # type: ignore
+        return Whisper, whisper_api
+
+
+Whisper, whisper_api = _import_whispercpp()
 
 logger = logging.getLogger(__name__)
 
