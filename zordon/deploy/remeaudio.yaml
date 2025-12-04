@@ -30,7 +30,7 @@ spec:
       - name: ghcr-creds
       containers:
       - name: remeaudio
-        image: ghcr.io/borisfaj/remeaudio:latest
+        image: ghcr.io/borisfaj/remeaudio:arm64-latest
         imagePullPolicy: Always
         command: ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
         envFrom:

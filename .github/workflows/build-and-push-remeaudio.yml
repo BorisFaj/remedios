@@ -25,6 +25,7 @@ env:
   DOCKERFILE: ./remedios/apis/Dockerfile_audio
   CONTEXT: ./remedios
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+  ARCH_TAG: amd64-latest
 
 jobs:
   build:
@@ -52,8 +53,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
-            type=raw,value=develop
+            type=raw,value=${{ env.ARCH_TAG }}
             type=sha
 
       - name: Build and push
