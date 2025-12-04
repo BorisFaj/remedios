@@ -48,15 +48,15 @@ jobs:
 
       - name: Run ${{ matrix.name }}
         run: |
-          env_args=""
+          env_list=()
           while IFS= read -r line; do
             line=$(echo "$line" | xargs)
             [ -z "$line" ] && continue
-            env_args="$env_args -e $line"
+            env_list+=("-e" "$line")
           done <<< "${{ matrix.env }}"
           docker run -d --name ${{ matrix.name }} \
             -p ${{ matrix.port }}:${{ matrix.port }} \
-            $env_args \
+            "${env_list[@]}" \
             test-${{ matrix.name }}
 
       - name: Wait for health ${{ matrix.name }}
