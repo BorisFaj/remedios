@@ -17,12 +17,12 @@ COPY requirements.txt requirements_audio.txt ./
 # Crear venv e instalar dependencias en modo CPU
 RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --upgrade pip setuptools \
-    && $VENV/bin/pip install --no-cache-dir -r requirements.txt \
+    && $VENV/bin/pip install --no-cache-dir -r server_requirements.txt \
     && $VENV/bin/pip install --no-cache-dir -r requirements_audio.txt \
     && $VENV/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Copiar código
-COPY . .
+COPY .. .
 
 ENV PATH="/remedios/.venv/bin:${PATH}"
 
