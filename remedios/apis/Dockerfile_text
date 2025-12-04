@@ -24,4 +24,4 @@ COPY . /app/remedios
 WORKDIR /app/remedios
 
 # Ejecutar
-CMD ["/app/remedios/.venv/bin/python", "-m", "remetext_service"]
+CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.text_service"]
