@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /remedios
 
-# Copiar requirements primero para cache
-COPY remedios/apis/requirements.txt remedios/apis/requirements_audio.txt ./
+# Copiar requirements primero para cache (rutas relativas al contexto ./remedios)
+COPY apis/requirements.txt apis/requirements_audio.txt ./
 
 # Crear venv e instalar dependencias en modo CPU
 RUN python3 -m venv $VENV \
@@ -23,8 +23,8 @@ RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --no-cache-dir -r requirements_audio.txt \
     && PIP_NO_BINARY=whispercpp $VENV/bin/pip install --force-reinstall --no-cache-dir --no-binary whispercpp whispercpp
 
-# Copiar código
-COPY .. .
+# Copiar código de la app (todo el contexto ./remedios)
+COPY . .
 
 ENV PATH="/remedios/.venv/bin:${PATH}"
 
