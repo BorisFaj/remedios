@@ -29,6 +29,7 @@ jobs:
               GRAPH_URL=https://example.com
               WHISPER_MODEL=ggml-tiny.en.bin
               WHISPER_MODEL_REPO=ggerganov/whisper.cpp
+              WHISPER_FAKE=1
           - name: remetext
             context: remedios
             dockerfile: remedios/apis/Dockerfile_text
