@@ -61,7 +61,7 @@ jobs:
         with:
           context: ${{ env.CONTEXT }}
           file: ${{ env.DOCKERFILE }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ env.DO_PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
