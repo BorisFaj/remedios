@@ -6,9 +6,8 @@ metadata:
 data:
   KAFKA_TOPIC: "whatsapp-audio"
   KAFKA_GROUP_ID: "remeaudio"
-  # Usa un modelo más pequeño si no hay recursos: openai/whisper-small/base/tiny
-#  WHISPER_MODEL: "openai/whisper-small"
-  WHISPER_MODEL: "Boritsuki/whisperL-v3-turbo"
+  WHISPER_MODEL: "ggml-large-v3-turbo-q5_0.bin"
+  WHISPER_MODEL_REPO: "ggerganov/whisper.cpp"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,7 +32,7 @@ spec:
       - name: remeaudio
         image: ghcr.io/borisfaj/remeaudio:latest
         imagePullPolicy: Always
-        command: ["/remedios/.venv/bin/python", "-m", "remeaudio_service"]
+        command: ["/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
         envFrom:
         - configMapRef:
             name: remedios-config

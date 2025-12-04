@@ -6,6 +6,11 @@ on:
     paths:
       - "zordon/**"
       - ".github/workflows/build-and-push.yml"
+  pull_request:
+    branches: ["develop"]
+    paths:
+      - "zordon/**"
+      - ".github/workflows/build-and-push.yml"
 
 permissions:
   contents: read
@@ -17,6 +22,7 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/remedios
   DOCKERFILE: ./zordon/core/Dockerfile_server
   CONTEXT: ./zordon
+  DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
 jobs:
   build:
@@ -54,6 +60,6 @@ jobs:
           context: ${{ env.CONTEXT }}
           file: ${{ env.DOCKERFILE }}
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ env.DO_PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

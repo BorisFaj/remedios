@@ -8,9 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar solo requirements para aprovechar cache
+# Copiar solo requirements para aprovechar cache (contexto ./remedios)
 WORKDIR /remedios
-COPY requirements.txt requirements_text.txt ./
+COPY apis/requirements.txt apis/requirements_text.txt ./
 
 # Crear entorno virtual e instalar deps
 RUN python3 -m venv $POETRY_VENV \
