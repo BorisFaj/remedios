@@ -6,13 +6,11 @@ from typing import Iterable, Union
 
 import ffmpeg
 from huggingface_hub import hf_hub_download
+from whispercpp import Whisper, api as whisper_api
 
 logger = logging.getLogger(__name__)
 
 WHISPER_FAKE = os.getenv("WHISPER_FAKE") == "1"
-
-if not WHISPER_FAKE:
-    from whispercpp import Whisper, api as whisper_api
 
 # Configuración de modelo
 WHISPER_MODEL_REPO = os.getenv("WHISPER_MODEL_REPO", "ggerganov/whisper.cpp")
@@ -73,6 +71,9 @@ def _load_model(model_path: str) -> "Whisper":
 
 
 def _get_model() -> "Whisper":
+    if WHISPER_FAKE:
+        raise RuntimeError("WHISPER_FAKE está activo; no se carga el modelo real")
+
     global _whisper_model
     if _whisper_model is None:
         _whisper_model = _load_model(WHISPER_MODEL_PATH)
