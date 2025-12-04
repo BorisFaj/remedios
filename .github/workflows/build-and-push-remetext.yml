@@ -7,6 +7,12 @@ on:
       - "remedios/**"
       - "zordon/deploy/remetext.yaml"
       - ".github/workflows/build-and-push-remetext.yml"
+  pull_request:
+    branches: ["develop"]
+    paths:
+      - "remedios/**"
+      - "zordon/deploy/remetext.yaml"
+      - ".github/workflows/build-and-push-remetext.yml"
 
 permissions:
   contents: read
@@ -18,6 +24,7 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/remetext
   DOCKERFILE: ./remedios/apis/Dockerfile_text
   CONTEXT: ./remedios
+  DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
 jobs:
   build:
@@ -55,7 +62,7 @@ jobs:
           context: ${{ env.CONTEXT }}
           file: ${{ env.DOCKERFILE }}
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ env.DO_PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
