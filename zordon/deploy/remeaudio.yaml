@@ -32,7 +32,7 @@ spec:
       - name: remeaudio
         image: ghcr.io/borisfaj/remeaudio:latest
         imagePullPolicy: Always
-        command: ["/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
+        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
         envFrom:
         - configMapRef:
             name: remedios-config
