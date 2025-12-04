@@ -1,6 +1,7 @@
 FROM onerahmet/ffmpeg:n7.1 AS ffmpeg
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
+ARG APP_SRC=.
 ENV PYTHON_VERSION=3.10
 
 ENV POETRY_VENV=/app/remedios/.venv
@@ -30,7 +31,7 @@ ENV PATH="${PATH}:${POETRY_VENV}/bin"
 WORKDIR /app
 COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 
-COPY . /app/remedios
+COPY ${APP_SRC}/ /app/remedios
 
 WORKDIR /app
 

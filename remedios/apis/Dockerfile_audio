@@ -1,5 +1,6 @@
 FROM python:3.10-slim
 
+ARG APP_SRC=.
 ENV VENV=/app/remedios/.venv
 ENV PIP_NO_BINARY=whispercpp
 ENV PYTHONPATH=/app
@@ -14,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copiar requirements primero para cache (contexto ./remedios)
-COPY apis/requirements.txt apis/requirements_audio.txt ./remedios/
+# Copiar requirements primero para cache (APP_SRC=remedios si el contexto es raíz)
+COPY ${APP_SRC}/apis/requirements.txt ${APP_SRC}/apis/requirements_audio.txt ./remedios/
 
 # Crear venv e instalar dependencias en modo CPU
 RUN python3 -m venv $VENV \
@@ -24,8 +25,8 @@ RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt \
     && PIP_NO_BINARY=whispercpp $VENV/bin/pip install --force-reinstall --no-cache-dir --no-binary whispercpp whispercpp
 
-# Copiar código de la app (todo el contexto ./remedios) conservando la ruta del paquete
-COPY . /app/remedios
+# Copiar código de la app conservando la ruta del paquete
+COPY ${APP_SRC}/ /app/remedios
 
 WORKDIR /app
 ENV PATH="/app/remedios/.venv/bin:${PATH}"
