@@ -42,8 +42,7 @@ RUN $POETRY_VENV/bin/pip install -r requirements.txt
 RUN $POETRY_VENV/bin/pip install -r requirements_audio.txt
 RUN $POETRY_VENV/bin/pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 
-# Instalar whispercpp desde tarball (fuente) sin binarios precompilados
-RUN PIP_NO_BINARY=:all: $POETRY_VENV/bin/pip install --no-cache-dir --no-binary :all: \
-    https://github.com/stlukey/whispercpp/archive/refs/heads/master.zip
+# Instalar whispercpp desde PyPI pero forzando build desde fuente (sin wheels)
+RUN PIP_NO_BINARY=:all: $POETRY_VENV/bin/pip install --no-cache-dir --no-binary :all: whispercpp
 
 CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
