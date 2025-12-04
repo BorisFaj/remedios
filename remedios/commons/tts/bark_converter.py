@@ -1,5 +1,5 @@
 from bark import SAMPLE_RATE, generate_audio, preload_models
-from remedios.tts.utils import wav_2_mp3
+from remedios.commons.tts.utils import wav_2_mp3
 
 # download and load all models
 preload_models()

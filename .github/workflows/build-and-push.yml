@@ -15,7 +15,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remedios
-  DOCKERFILE: ./zordon/Dockerfile
+  DOCKERFILE: ./zordon/core/Dockerfile_server
   CONTEXT: ./zordon
 
 jobs:

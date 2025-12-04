@@ -3,7 +3,7 @@ import sys
 
 from flask import Flask, jsonify, request
 
-import remeaudio
+from remedios.whatsapp.text import run
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,12 +30,12 @@ def process():
         return jsonify({"status": "error", "message": "No JSON received"}), 400
 
     try:
-        remeaudio.run(payload)
+        run(payload)
         return jsonify({"status": "success"}), 200
-    except Exception as exc:  # pragma: no cover - external deps
-        logger.exception("Error processing audio message")
+    except Exception as exc:  # pragma: no cover - log and return
+        logger.exception("Error processing message")
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8001)
+    app.run(host="0.0.0.0", port=8000)

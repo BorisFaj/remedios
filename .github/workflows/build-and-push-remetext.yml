@@ -5,7 +5,7 @@ on:
     branches: ["develop"]
     paths:
       - "remedios/**"
-      - "zordon/remetext.yaml"
+      - "zordon/deploy/remetext.yaml"
       - ".github/workflows/build-and-push-remetext.yml"
 
 permissions:
@@ -16,7 +16,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remetext
-  DOCKERFILE: ./remedios/Dockerfile_text
+  DOCKERFILE: ./remedios/apis/Dockerfile_text
   CONTEXT: ./remedios
 
 jobs:
