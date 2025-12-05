@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
+    netcat-openbsd \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,18 +23,27 @@ COPY ${APP_SRC}/apis/requirements.txt ${APP_SRC}/apis/requirements_audio.txt ./r
 RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --upgrade pip setuptools \
     && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt \
-    && git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
-    && cd /tmp/whisper.cpp/bindings/python \
-    && $VENV/bin/pip install --no-cache-dir -r requirements.txt \
-    && $VENV/bin/python setup.py build_ext --inplace \
-    && $VENV/bin/pip install --no-cache-dir .
+    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt
+
+# Construir binario CLI de whisper.cpp (CPU)
+RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
+    && cd /tmp/whisper.cpp \
+    && cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build -j \
+    && (cp /tmp/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whispercpp-cli || cp /tmp/whisper.cpp/build/bin/whisper /usr/local/bin/whispercpp-cli || cp /tmp/whisper.cpp/build/bin/main /usr/local/bin/whispercpp-cli) \
+    && (cp /tmp/whisper.cpp/build/bin/whisper-server /usr/local/bin/whisper-server || true) \
+    && find /tmp/whisper.cpp/build -type f -name 'lib*.so*' -exec cp {} /usr/local/lib/ \; \
+    && ldconfig \
+    && rm -rf /tmp/whisper.cpp
 
 # Copiar código de la app conservando la ruta del paquete
 COPY ${APP_SRC}/ /app/remedios
+COPY ${APP_SRC}/apis/start_whisper.sh /usr/local/bin/start_whisper.sh
 
 WORKDIR /app
 ENV PATH="/app/remedios/.venv/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
+RUN chmod +x /usr/local/bin/start_whisper.sh
 
-# Ejecutar servicio HTTP de remeaudio
-CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
+# Arrancar whisper-server y luego el servicio HTTP
+ENTRYPOINT ["/usr/local/bin/start_whisper.sh"]

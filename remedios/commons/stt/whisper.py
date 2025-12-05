@@ -1,14 +1,14 @@
 import logging
 import os
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Iterable, Union
 
 import ffmpeg
+import httpx
 from huggingface_hub import hf_hub_download
-
-
-from whispercpp import Whisper, api as whisper_api  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -19,33 +19,34 @@ WHISPER_MODEL_REPO = os.getenv("WHISPER_MODEL_REPO", "ggerganov/whisper.cpp")
 WHISPER_MODEL_FILE = os.getenv("WHISPER_MODEL_FILE", "ggml-large-v3-turbo-q5_0.bin")
 WHISPER_MODEL_PATH = os.getenv("WHISPER_MODEL", WHISPER_MODEL_FILE)
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "es")
+WHISPER_CLI = os.getenv("WHISPER_CLI", "/usr/local/bin/whispercpp-cli")
+WHISPER_SERVER_URL = os.getenv("WHISPER_SERVER_URL", "http://127.0.0.1:9000")
 
-_whisper_model = None  # cache perezoso
-
-
-def _init_whisper_from_file(local_path: str) -> "Whisper":
-    """
-    Crea una instancia de Whisper con un modelo custom (no limitado a MODELS_URL).
-    Replica la lógica de from_pretrained pero usando un path local.
-    """
-    _ref = object.__new__(Whisper)
-    context = whisper_api.Context.from_file(local_path, no_state=False)
-    params = (
-        whisper_api.Params.from_enum(whisper_api.SAMPLING_GREEDY)
-        .with_print_progress(False)
-        .with_print_realtime(False)
-        .build()
-    )
-    context.reset_timings()
-    _context_initialized = True
-    _transcript: list[str] = []
-    _ref.__dict__.update(locals())
-    return _ref
+_resolved_model_path: str | None = None
 
 
-def _load_model(model_path: str) -> "Whisper":
+def _ensure_cli() -> str:
+    if not WHISPER_CLI:
+        raise RuntimeError("WHISPER_CLI no está configurado")
+    if os.path.isfile(WHISPER_CLI):
+        return WHISPER_CLI
+
+    resolved = shutil.which(WHISPER_CLI)
+    if resolved:
+        return resolved
+
+    raise RuntimeError(f"No se encontró el binario whisper.cpp en {WHISPER_CLI}")
+
+
+def _resolve_model_path(model_path: str) -> str:
+    global _resolved_model_path
+    if _resolved_model_path:
+        return _resolved_model_path
+
     if os.path.isfile(model_path):
-        return _init_whisper_from_file(model_path)
+        _resolved_model_path = model_path
+        return _resolved_model_path
+
     logger.warning("Modelo Whisper.cpp no encontrado en %s, se intentará resolverlo de forma automática", model_path)
 
     candidates = []
@@ -63,23 +64,14 @@ def _load_model(model_path: str) -> "Whisper":
                 filename=candidate,
                 local_files_only=False,
             )
-            return _init_whisper_from_file(local_path)
+            _resolved_model_path = local_path
+            return _resolved_model_path
         except Exception as exc:
             last_exc = exc
             logger.warning("No se pudo descargar %s/%s: %s", WHISPER_MODEL_REPO, candidate, exc)
     if last_exc:
         raise last_exc
     raise RuntimeError("No se encontraron candidatos de modelo para whisper.cpp")
-
-
-def _get_model() -> "Whisper":
-    if WHISPER_FAKE:
-        raise RuntimeError("WHISPER_FAKE está activo; no se carga el modelo real")
-
-    global _whisper_model
-    if _whisper_model is None:
-        _whisper_model = _load_model(WHISPER_MODEL_PATH)
-    return _whisper_model
 
 
 def _to_wav_file(audio: Union[str, bytes, bytearray]) -> str:
@@ -126,14 +118,73 @@ def _collect_text(segments: Union[str, Iterable]) -> str:
     return " ".join(pieces).strip()
 
 
+def _transcribe_via_server(wav_path: str) -> str:
+    url = WHISPER_SERVER_URL.rstrip("/") + "/inference"
+    with open(wav_path, "rb") as fh:
+        files = {"file": ("audio.wav", fh, "audio/wav")}
+        try:
+            resp = httpx.post(url, files=files, timeout=180)
+            resp.raise_for_status()
+        except Exception as exc:  # pragma: no cover - network/runtime
+            logger.error("whisper-server falló: %s", exc)
+            raise RuntimeError("Error al transcribir con whisper-server") from exc
+
+    try:
+        data = resp.json()
+        text = data.get("text") or data.get("result") or ""
+        if text:
+            return text.strip()
+    except Exception:
+        pass
+
+    # fallback si devuelve texto plano
+    return resp.text.strip()
+
+
 def transcribe(audio: Union[str, bytes, bytearray]) -> str:
     if WHISPER_FAKE:
         return "transcription-disabled"
 
     wav_path = _to_wav_file(audio)
     try:
-        model = _get_model()
-        return model.transcribe_from_file(wav_path)
+        if WHISPER_SERVER_URL:
+            return _transcribe_via_server(wav_path)
+
+        cli_path = _ensure_cli()
+        model_path = _resolve_model_path(WHISPER_MODEL_PATH)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_base = os.path.join(tmpdir, "out")
+            cmd = [
+                cli_path,
+                "-m",
+                model_path,
+                "-f",
+                wav_path,
+                "-l",
+                WHISPER_LANGUAGE,
+                "-otxt",
+                "-of",
+                output_base,
+            ]
+            try:
+                completed = subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                logger.error("whisper.cpp CLI falló: %s", exc.stderr or exc.stdout)
+                raise RuntimeError("Error al transcribir con whisper.cpp CLI") from exc
+
+            txt_file = f"{output_base}.txt"
+            if not os.path.exists(txt_file):
+                logger.error("whisper.cpp no generó salida .txt; stdout=%s", completed.stdout)
+                raise RuntimeError("No se generó transcripción")
+
+            with open(txt_file, "r", encoding="utf-8", errors="ignore") as fh:
+                return _collect_text(fh.read())
     finally:
         try:
             os.unlink(wav_path)
