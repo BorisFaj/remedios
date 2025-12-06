@@ -4,6 +4,7 @@ import sys
 from flask import Flask, jsonify, request
 
 from remedios.whatsapp.audio import run
+from remedios.commons.stt.whisper import WHISPER_SERVER_URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +18,17 @@ app = Flask(__name__)
 
 @app.route("/health", methods=["GET"])
 def health():
+    # Intentar alcanzar whisper-server si está configurado
+    if WHISPER_SERVER_URL:
+        import httpx
+
+        url = WHISPER_SERVER_URL.rstrip("/") + "/health"
+        try:
+            resp = httpx.get(url, timeout=5)
+            return jsonify({"status": "ok", "whisper_server": resp.status_code}), 200
+        except Exception:
+            return jsonify({"status": "ok", "whisper_server": "unreachable"}), 503
+
     return jsonify({"status": "ok"}), 200
 
 
