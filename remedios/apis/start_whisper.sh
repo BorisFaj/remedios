@@ -26,6 +26,7 @@ fi
 
 PORT=${WHISPER_SERVER_PORT:-9000}
 LANG=${WHISPER_LANGUAGE:-es}
+APP_PORT=${APP_PORT:-8001}
 
 # Lanzar whisper-server en segundo plano
 echo "Arrancando whisper-server: model=$MODEL_PATH port=$PORT lang=$LANG" >&2
@@ -48,4 +49,4 @@ if ! nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1; then
   exit 1
 fi
 
-exec /app/remedios/.venv/bin/python -m remedios.apis.audio_service
+exec /app/remedios/.venv/bin/python -m remedios.apis.audio_service --port "$APP_PORT"
