@@ -30,6 +30,7 @@ APP_PORT=${APP_PORT:-8001}
 
 # Lanzar whisper-server en segundo plano
 echo "Arrancando whisper-server: model=$MODEL_PATH port=$PORT lang=$LANG" >&2
+export WHISPER_DUMP=/tmp/whisper-dump
 /usr/local/bin/whisper-server --model "$MODEL_PATH" --port "$PORT" --language "$LANG" --host 0.0.0.0 >/tmp/whisper-server.log 2>&1 &
 SERVER_PID=$!
 
