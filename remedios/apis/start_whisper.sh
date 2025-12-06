@@ -28,12 +28,14 @@ PORT=${WHISPER_SERVER_PORT:-9000}
 LANG=${WHISPER_LANGUAGE:-es}
 
 # Lanzar whisper-server en segundo plano
+echo "Arrancando whisper-server: model=$MODEL_PATH port=$PORT lang=$LANG" >&2
 /usr/local/bin/whisper-server --model "$MODEL_PATH" --port "$PORT" --language "$LANG" --host 0.0.0.0 >/tmp/whisper-server.log 2>&1 &
 SERVER_PID=$!
 
 # Esperar a que el puerto esté arriba (máx 120s)
 for i in $(seq 1 120); do
   if nc -z 127.0.0.1 "$PORT" >/dev/null 2>&1; then
+    echo "whisper-server listo en puerto $PORT" >&2
     break
   fi
   sleep 1
