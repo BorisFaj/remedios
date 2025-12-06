@@ -28,7 +28,7 @@ PORT=${WHISPER_SERVER_PORT:-9000}
 LANG=${WHISPER_LANGUAGE:-es}
 
 # Lanzar whisper-server en segundo plano
-/usr/local/bin/whisper-server -m "$MODEL_PATH" -p "$PORT" -l "$LANG" --host 0.0.0.0 --no-ssl >/tmp/whisper-server.log 2>&1 &
+/usr/local/bin/whisper-server --model "$MODEL_PATH" --port "$PORT" --language "$LANG" --host 0.0.0.0 >/tmp/whisper-server.log 2>&1 &
 SERVER_PID=$!
 
 # Esperar a que el puerto esté arriba (máx 120s)
