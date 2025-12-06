@@ -32,7 +32,10 @@ spec:
       - name: remeaudio
         image: ghcr.io/borisfaj/remeaudio:arm64-latest
         imagePullPolicy: Always
-        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio_service"]
+        command: ["/usr/local/bin/start_whisper.sh"]
+        env:
+        - name: APP_PORT
+          value: "8001"
         envFrom:
         - configMapRef:
             name: remedios-config
@@ -40,21 +43,15 @@ spec:
             name: remeaudio-config
         - secretRef:
             name: remedios-secrets
-        env:
-        - name: WHISPER_MODEL
-          valueFrom:
-            configMapKeyRef:
-              name: remeaudio-config
-              key: WHISPER_MODEL
         ports:
         - containerPort: 8001
         resources:
           requests:
             cpu: "500m"
-            memory: "3Gi"
+            memory: "2Gi"
           limits:
             cpu: "2000m"
-            memory: "5Gi"
+            memory: "4Gi"
       nodeSelector:
         kubernetes.io/arch: arm64
 ---
