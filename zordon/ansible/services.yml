@@ -11,7 +11,7 @@
     secrets_src: "{{ playbook_dir }}/../.secrets"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
-    remeaudio_manifest: "{{ app_root }}/deploy/remeaudio.yaml"
+    remeaudio_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -58,7 +58,7 @@
 
     - name: Copiar manifiesto de remeaudio
       copy:
-        src: ../deploy/remeaudio.yaml
+        src: ../deploy/audio_whispercpp.yaml
         dest: "{{ remeaudio_manifest }}"
         mode: "0644"
       when: (deploy_remeaudio | default(true) | bool) == true

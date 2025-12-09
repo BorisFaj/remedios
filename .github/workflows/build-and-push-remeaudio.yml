@@ -5,13 +5,13 @@ on:
     branches: ["develop"]
     paths:
       - "remedios/**"
-      - "zordon/deploy/remeaudio.yaml"
+      - "zordon/deploy/audio_whispercpp.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
   pull_request:
     branches: ["develop"]
     paths:
       - "remedios/**"
-      - "zordon/deploy/remeaudio.yaml"
+      - "zordon/deploy/audio_whispercpp.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
 
 permissions:
@@ -22,7 +22,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remeaudio
-  DOCKERFILE: ./remedios/apis/Dockerfile_audio
+  DOCKERFILE: ./remedios/apis/Dockerfile_whispercpp
   CONTEXT: ./remedios
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
   ARCH_TAG: amd64-latest

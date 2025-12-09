@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from remedios.commons.stt import whisper
-
 _AUDIO_PATH = Path(__file__).parent / "audio_descargado.ogg"
 
 
