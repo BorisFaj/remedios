@@ -34,23 +34,24 @@ def run(request: dict):
                 logger.exception("No se pudo convertir audio a wav: %s", exc)
                 wav_bytes = None
 
-            # Transcripción turbo (backend actual)
+            cpp_txt = "[cpp no ejecutado]"
+            turbo_txt = "[turbo no ejecutado]"
+            # Transcripción cpp via server (servicio whisper-cpp:9000)
+            if wav_bytes:
+                try:
+                    cpp_txt = whisper_cpp._transcribe_via_server(
+                        wav_bytes, url="http://whisper-cpp:9000"
+                    )
+                except Exception as exc:
+                    cpp_txt = f"[error cpp: {exc}]"
+
+            # Transcripción turbo (servicio http whisper-turbo)
             try:
                 turbo_txt = transcribe(audio)
             except Exception as exc:
                 turbo_txt = f"[error turbo: {exc}]"
 
-            # Transcripción cpp via server (servicio remeaudio-cpp)
-            cpp_txt = "[cpp no ejecutado]"
-            if wav_bytes:
-                try:
-                    cpp_txt = whisper_cpp._transcribe_via_server(
-                        wav_bytes, url="http://remeaudio-cpp:9000"
-                    )
-                except Exception as exc:
-                    cpp_txt = f"[error cpp: {exc}]"
-
-            final_msg = f"[turbo] {turbo_txt}\n[cpp] {cpp_txt}"
+            final_msg = f"[cpp] {cpp_txt}\n[turbo] {turbo_txt}"
             logger.info(f"[IA-Transcription]: {final_msg}")
 
             send_text_answer(final_msg, message["from"], message["id"], phone_number)

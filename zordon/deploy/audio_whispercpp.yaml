@@ -12,31 +12,33 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: remeaudio
+  name: whisper-cpp
   namespace: remedios
   labels:
-    app: remeaudio
+    app: whisper-cpp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: remeaudio
+      app: whisper-cpp
   template:
     metadata:
       labels:
-        app: remeaudio
+        app: whisper-cpp
     spec:
       imagePullSecrets:
       - name: ghcr-creds
       containers:
-      - name: remeaudio
-        image: ghcr.io/borisfaj/remeaudio-whispercpp:arm64-latest
+      - name: whisper-cpp
+        image: ghcr.io/borisfaj/whisper-cpp:arm64-latest
         imagePullPolicy: Always
         env:
         - name: APP_PORT
           value: "8001"
         - name: WHISPER_SERVER_THREADS
           value: "1"
+        - name: WHISPER_BACKEND
+          value: "cpp"
         envFrom:
         - configMapRef:
             name: remedios-config
@@ -46,6 +48,7 @@ spec:
             name: remedios-secrets
         ports:
         - containerPort: 8001
+        - containerPort: 9000
         resources:
           requests:
             cpu: "500m"
@@ -59,11 +62,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: remeaudio-cpp
+  name: whisper-cpp
   namespace: remedios
 spec:
   selector:
-    app: remeaudio
+    app: whisper-cpp
   ports:
-  - port: 8001
+  - name: http
+    port: 8001
     targetPort: 8001
+  - name: whisper
+    port: 9000
+    targetPort: 9000
