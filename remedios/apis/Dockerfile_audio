@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     git \
     libopenblas-dev \
+    libgomp1 \
     netcat-openbsd \
     pkg-config \
     python3-venv \
