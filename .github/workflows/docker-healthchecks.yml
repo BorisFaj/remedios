@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - name: remeaudio
-            context: remedios/apis/audio
+            context: .
             dockerfile: remedios/apis/audio/Dockerfile_whispercpp
             port: 8001
             health: /health
@@ -31,7 +31,7 @@ jobs:
               WHISPER_MODEL_REPO=ggerganov/whisper.cpp
               WHISPER_FAKE=1
           - name: remetext
-            context: remedios
+            context: .
             dockerfile: remedios/apis/text/Dockerfile_text
             port: 8000
             health: /health
