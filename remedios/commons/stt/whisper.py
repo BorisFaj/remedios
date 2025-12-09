@@ -71,10 +71,12 @@ def _transcribe_via_server(wav_bytes: bytes) -> str:
 
     try:
         logger.info("Enviando audio a whisper-server %s", url)
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        # Usa spooled temp para evitar disco en audios pequeños; log si se vuelca a disco
+        with tempfile.SpooledTemporaryFile(max_size=2 * 1024 * 1024, suffix=".wav") as tmp:
             tmp.write(wav_bytes)
-            tmp.flush()
             tmp.seek(0)
+            if getattr(tmp, "_rolled", False):
+                logger.info("WAV spooled a disco (size=%d bytes)", len(wav_bytes))
             files = {"file": ("audio.wav", tmp, "audio/wav")}
             resp = requests.post(url, files=files, timeout=180)
             logger.info("Respuesta whisper-server: status=%s", resp.status_code)
