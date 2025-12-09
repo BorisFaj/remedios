@@ -85,14 +85,21 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
 
     logger.debug(f"buscando audio {audio_id}...")
     response_url = requests.get("{}/{}".format(GRAPH_URL, audio_id), headers=__HEADERS)
+    logger.info("fetch meta URL status=%s", response_url.status_code)
 
     # Verifica si la solicitud fue exitosa
     if response_url.status_code == 200:
         json_url = json.loads(response_url.content)
         audio_response = requests.get(json_url["url"], headers=__HEADERS)
+        logger.info(
+            "audio download status=%s size=%s",
+            audio_response.status_code,
+            len(audio_response.content or b""),
+        )
         if audio_response.status_code == 200:
-            # with open("audio_descargado.ogg", "wb") as file:
+            # with open("/tmp/audio_descargado.ogg", "wb") as file:
             #     file.write(audio_response.content)  # me lo guardo a ver que onda
+            # logger.info("guardado /tmp/audio_descargado.ogg (%s bytes)", len(audio_response.content))
             audio_file = audio_response.content
         else:
             logger.error(f"Error al descargar el archivo: {response_url.status_code}")

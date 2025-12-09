@@ -394,3 +394,4 @@ zordon/ansible/inventory.ini
 .idea
 .idea/*
 .idea/inspectionProfiles/profiles_settings.xml
+/models/
