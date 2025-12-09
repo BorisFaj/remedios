@@ -20,13 +20,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copiar requirements primero para cache (APP_SRC=remedios si el contexto es raíz)
-COPY ${APP_SRC}/apis/requirements.txt ${APP_SRC}/apis/audio/requirements_whispercpp.txt ./remedios/
+COPY ${APP_SRC}/apis/requirements.txt ./remedios/
+COPY ${APP_SRC}/apis/audio/whispercpp/requirements.txt ./remedios/requirements_audio.txt
 
 # Crear venv e instalar dependencias en modo CPU
 RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --upgrade pip setuptools \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_whispercpp.txt
+    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt \
+    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt
 
 # Construir binario CLI y server de whisper.cpp (CPU) en tag estable
 RUN git clone --depth 1 --branch v1.8.2 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
@@ -57,4 +58,4 @@ ENV PATH="/app/remedios/.venv/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Arranque supervisado en Python
-ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio.whispercpp_launcher"]
+ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio.whispercpp.launcher"]
