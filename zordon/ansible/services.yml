@@ -77,13 +77,13 @@
       when: (deploy_remeaudio_turbo | default(false) | bool) == true
 
     - name: Reiniciar deployment whisper-turbo para coger cambios
-      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remeaudio-turbo -n remedios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/whisper-turbo -n remedios
       register: restart_audio_turbo
       changed_when: "'restarted' in restart_audio_turbo.stdout or restart_audio_turbo.rc == 0"
       when: (deploy_remeaudio_turbo | default(false) | bool) == true
 
     - name: Esperar rollout de whisper-turbo
-      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remeaudio-turbo -n remedios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-turbo -n remedios
       when: (deploy_remeaudio_turbo | default(false) | bool) == true
 
     - name: Copiar .secrets al master
