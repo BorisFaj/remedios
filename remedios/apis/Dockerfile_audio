@@ -28,7 +28,7 @@ RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt
 
 # Construir binario CLI y server de whisper.cpp (CPU) en tag estable
-RUN git clone --depth 1 --branch v1.6.2 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
+RUN git clone --depth 1 --branch v1.7.0 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
     && cd /tmp/whisper.cpp \
     && cmake -B build \
         -DCMAKE_BUILD_TYPE=Release \
