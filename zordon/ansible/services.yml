@@ -13,6 +13,7 @@
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
     remeaudio_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
+    remeaudio_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -63,6 +64,27 @@
         dest: "{{ remeaudio_manifest }}"
         mode: "0644"
       when: (deploy_remeaudio | default(true) | bool) == true
+
+    - name: Copiar manifiesto de remeaudio-turbo
+      copy:
+        src: ../deploy/audio_whisperturbo.yaml
+        dest: "{{ remeaudio_turbo_manifest }}"
+        mode: "0644"
+      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+
+    - name: Aplicar manifiesto de remeaudio-turbo
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ remeaudio_turbo_manifest }}
+      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+
+    - name: Reiniciar deployment remeaudio-turbo para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remeaudio-turbo -n remedios
+      register: restart_audio_turbo
+      changed_when: "'restarted' in restart_audio_turbo.stdout or restart_audio_turbo.rc == 0"
+      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+
+    - name: Esperar rollout de remeaudio-turbo
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remeaudio-turbo -n remedios
+      when: (deploy_remeaudio_turbo | default(false) | bool) == true
 
     - name: Copiar .secrets al master
       copy:
