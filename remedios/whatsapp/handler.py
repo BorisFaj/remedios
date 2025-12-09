@@ -6,6 +6,8 @@ import json
 import os
 import logging
 import sys
+import subprocess
+import json as jsonlib
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +22,7 @@ logger = logging.getLogger(__name__)
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
+FFPROBE_BIN = os.environ.get("FFPROBE_BIN", "ffprobe")
 
 
 def _post_graph(url: str, payload: dict) -> requests.Response:
@@ -91,16 +94,15 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
     if response_url.status_code == 200:
         json_url = json.loads(response_url.content)
         audio_response = requests.get(json_url["url"], headers=__HEADERS)
-        logger.info(
-            "audio download status=%s size=%s",
-            audio_response.status_code,
-            len(audio_response.content or b""),
-        )
+        content = audio_response.content or b""
+        logger.info("audio download status=%s size=%s", audio_response.status_code, len(content))
         if audio_response.status_code == 200:
-            # with open("/tmp/audio_descargado.ogg", "wb") as file:
-            #     file.write(audio_response.content)  # me lo guardo a ver que onda
-            # logger.info("guardado /tmp/audio_descargado.ogg (%s bytes)", len(audio_response.content))
-            audio_file = audio_response.content
+            duration = _probe_duration_bytes(content)
+            if duration is not None:
+                logger.info("audio duration=%.2fs (ffprobe)", duration)
+            else:
+                logger.warning("No se pudo obtener duración con ffprobe")
+            audio_file = content
         else:
             logger.error(f"Error al descargar el archivo: {response_url.status_code}")
             logger.error(response_url.text)
@@ -110,6 +112,28 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
         return io.BytesIO()
 
     return audio_file
+
+
+def _probe_duration_bytes(data: bytes):
+    """Devuelve duración en segundos usando ffprobe desde stdin; None si falla."""
+    try:
+        cmd = [
+            FFPROBE_BIN,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            "-i",
+            "pipe:0",
+        ]
+        out = subprocess.check_output(cmd, input=data, stderr=subprocess.STDOUT, text=True)
+        data = jsonlib.loads(out)
+        dur = float(data.get("format", {}).get("duration", 0.0))
+        return dur
+    except Exception:
+        return None
 
 # def send_audio_answer(message: dict, phone_number) -> None:
 #     # Transcribir audio

@@ -9,6 +9,8 @@ import requests
 logger = logging.getLogger(__name__)
 
 WHISPER_FAKE = os.getenv("WHISPER_FAKE") == "1"
+WHISPER_TIMEOUT = os.getenv("WHISPER_TIMEOUT")
+WHISPER_TIMEOUT = float(WHISPER_TIMEOUT) if WHISPER_TIMEOUT not in (None, "", "None") else None
 
 # Configuración de modelo
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "es")
@@ -78,7 +80,7 @@ def _transcribe_via_server(wav_bytes: bytes) -> str:
             if getattr(tmp, "_rolled", False):
                 logger.info("WAV spooled a disco (size=%d bytes)", len(wav_bytes))
             files = {"file": ("audio.wav", tmp, "audio/wav")}
-            resp = requests.post(url, files=files, timeout=180)
+            resp = requests.post(url, files=files, timeout=WHISPER_TIMEOUT)
             logger.info("Respuesta whisper-server: status=%s", resp.status_code)
             resp.raise_for_status()
             return _parse_response(resp)
