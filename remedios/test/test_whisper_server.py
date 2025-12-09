@@ -9,7 +9,7 @@ def _load_wav_bytes() -> bytes:
     raw = _AUDIO_PATH.read_bytes()
     return whisper._to_wav_file(raw)
 
-def test_multipart_variants():
+def test_transcribe_via_server():
     wav = _load_wav_bytes()
     transcription = whisper._transcribe_via_server(wav)
     print(transcription)
