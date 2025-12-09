@@ -132,7 +132,8 @@ def _probe_duration_bytes(data: bytes):
         data = jsonlib.loads(out)
         dur = float(data.get("format", {}).get("duration", 0.0))
         return dur
-    except Exception:
+    except Exception as exc:
+        logger.error("ffprobe failed to get duration: %s", exc)
         return None
 
 # def send_audio_answer(message: dict, phone_number) -> None:
