@@ -58,7 +58,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: remeaudio-turbo
+  name: remeaudio
   namespace: remedios
 spec:
   selector:
