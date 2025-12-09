@@ -20,8 +20,8 @@ jobs:
       matrix:
         include:
           - name: remeaudio
-            context: remedios
-            dockerfile: remedios/apis/Dockerfile_whispercpp
+            context: remedios/apis/audio
+            dockerfile: remedios/apis/audio/Dockerfile_whispercpp
             port: 8001
             health: /health
             env: >
@@ -32,7 +32,7 @@ jobs:
               WHISPER_FAKE=1
           - name: remetext
             context: remedios
-            dockerfile: remedios/apis/Dockerfile_text
+            dockerfile: remedios/apis/text/Dockerfile_text
             port: 8000
             health: /health
             env: ""
