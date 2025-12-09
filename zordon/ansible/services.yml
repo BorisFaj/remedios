@@ -11,6 +11,7 @@
     secrets_src: "{{ playbook_dir }}/../.secrets"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
+    whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
     remeaudio_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
@@ -92,6 +93,7 @@
       shell: |
         kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
           --from-env-file={{ app_root }}/.secrets \
+          ${whisper_backend:+ --from-literal=WHISPER_BACKEND=${whisper_backend} } \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
 

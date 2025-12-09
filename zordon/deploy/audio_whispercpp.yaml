@@ -30,7 +30,7 @@ spec:
       - name: ghcr-creds
       containers:
       - name: remeaudio
-        image: ghcr.io/borisfaj/remeaudio:arm64-latest
+        image: ghcr.io/borisfaj/remeaudio-whispercpp:arm64-latest
         imagePullPolicy: Always
         env:
         - name: APP_PORT
