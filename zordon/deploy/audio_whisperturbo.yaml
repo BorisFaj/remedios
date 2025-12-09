@@ -11,25 +11,25 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: remeaudio-turbo
+  name: whisper-turbo
   namespace: remedios
   labels:
-    app: remeaudio-turbo
+    app: whisper-turbo
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: remeaudio-turbo
+      app: whisper-turbo
   template:
     metadata:
       labels:
-        app: remeaudio-turbo
+        app: whisper-turbo
     spec:
       imagePullSecrets:
       - name: ghcr-creds
       containers:
-      - name: remeaudio-turbo
-        image: ghcr.io/borisfaj/remeaudio-whisperturbo:arm64-latest
+      - name: whisper-turbo
+        image: ghcr.io/borisfaj/whisper-turbo:arm64-latest
         imagePullPolicy: Always
         env:
         - name: APP_PORT
@@ -58,11 +58,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: remeaudio
+  name: whisper-turbo
   namespace: remedios
 spec:
   selector:
-    app: remeaudio-turbo
+    app: whisper-turbo
   ports:
   - port: 8001
     targetPort: 8001
