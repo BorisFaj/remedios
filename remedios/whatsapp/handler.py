@@ -128,8 +128,8 @@ def _probe_duration_bytes(data: bytes):
             "-i",
             "pipe:0",
         ]
-        out = subprocess.check_output(cmd, input=data, stderr=subprocess.STDOUT, text=True)
-        data = jsonlib.loads(out)
+        out = subprocess.check_output(cmd, input=data, stderr=subprocess.STDOUT)
+        data = jsonlib.loads(out.decode("utf-8", "ignore"))
         dur = float(data.get("format", {}).get("duration", 0.0))
         return dur
     except Exception as exc:
