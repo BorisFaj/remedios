@@ -1,0 +1,60 @@
+FROM python:3.10-slim
+
+ARG APP_SRC=remedios
+ENV VENV=/app/remedios/.venv
+ENV PYTHONPATH=/app
+
+# Dependencias base y ffmpeg para manejar audio
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    build-essential \
+    cmake \
+    git \
+    libopenblas-dev \
+    libgomp1 \
+    netcat-openbsd \
+    pkg-config \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copiar requirements primero para cache (APP_SRC=remedios si el contexto es raíz)
+COPY ${APP_SRC}/apis/requirements.txt ${APP_SRC}/apis/audio/requirements_whispercpp.txt ./remedios/
+
+# Crear venv e instalar dependencias en modo CPU
+RUN python3 -m venv $VENV \
+    && $VENV/bin/pip install --upgrade pip setuptools \
+    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt \
+    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_whispercpp.txt
+
+# Construir binario CLI y server de whisper.cpp (CPU) en tag estable
+RUN git clone --depth 1 --branch v1.8.2 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
+    && cd /tmp/whisper.cpp \
+    && cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DGGML_NATIVE=OFF \
+        -DWHISPER_BUILD_SERVER=ON \
+        -DWHISPER_BUILD_EXAMPLES=ON \
+        -DGGML_OPENMP=ON \
+        -DGGML_BLAS=ON \
+        -DGGML_BLAS_VENDOR=OpenBLAS \
+    && cmake --build build -j \
+    && WHISPER_CLI_BIN=$(find /tmp/whisper.cpp/build/bin -maxdepth 1 -type f \( -name 'whisper-cli' -o -name 'whisper' -o -name 'main' \) | head -n1) \
+    && if [ -z "$WHISPER_CLI_BIN" ]; then echo 'whisper cli no encontrado' >&2; exit 1; fi \
+    && cp "$WHISPER_CLI_BIN" /usr/local/bin/whispercpp-cli \
+    && WHISPER_SERVER_BIN=$(find /tmp/whisper.cpp/build/bin -maxdepth 1 -type f \( -name 'whisper-server' -o -name 'server' \) | head -n1) \
+    && if [ -z "$WHISPER_SERVER_BIN" ]; then echo 'whisper-server no encontrado' >&2; exit 1; fi \
+    && cp "$WHISPER_SERVER_BIN" /usr/local/bin/whisper-server \
+    && find /tmp/whisper.cpp/build -type f -name 'lib*.so*' -exec cp {} /usr/local/lib/ \; \
+    && ldconfig \
+    && rm -rf /tmp/whisper.cpp
+
+# Copiar código de la app conservando la ruta del paquete
+COPY ${APP_SRC}/ /app/remedios
+WORKDIR /app
+ENV PATH="/app/remedios/.venv/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
+
+# Arranque supervisado en Python
+ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio.whispercpp_launcher"]

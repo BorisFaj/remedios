@@ -1,9 +1,12 @@
+import argparse
 import logging
+import os
 import sys
 
 from flask import Flask, jsonify, request
 
 from remedios.whatsapp.audio import run
+from remedios.commons.stt.whisper.whisper_cpp import WHISPER_SERVER_URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +20,17 @@ app = Flask(__name__)
 
 @app.route("/health", methods=["GET"])
 def health():
+    # Intentar alcanzar whisper-server si está configurado
+    if WHISPER_SERVER_URL:
+        import httpx
+
+        url = WHISPER_SERVER_URL.rstrip("/") + "/health"
+        try:
+            resp = httpx.get(url, timeout=5)
+            return jsonify({"status": "ok", "whisper_server": resp.status_code}), 200
+        except Exception:
+            return jsonify({"status": "ok", "whisper_server": "unreachable"}), 503
+
     return jsonify({"status": "ok"}), 200
 
 
@@ -37,5 +51,22 @@ def process():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Audio service")
+    parser.add_argument(
+        "--host",
+        default=os.getenv("APP_HOST", "0.0.0.0"),
+        help="Host a escuchar (default: APP_HOST env o 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("APP_PORT", "8001")),
+        help="Puerto a escuchar (default: APP_PORT env o 8001)",
+    )
+    args = parser.parse_args()
+    app.run(host=args.host, port=args.port)
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8001)
+    main()
