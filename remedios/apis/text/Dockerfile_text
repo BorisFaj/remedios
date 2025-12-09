@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-ARG APP_SRC=.
+ARG APP_SRC=remedios
 ENV POETRY_VENV=/app/remedios/.venv
 ENV PYTHONPATH=/app
 
