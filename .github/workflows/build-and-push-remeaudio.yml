@@ -21,7 +21,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
-  IMAGE_NAME: ${{ github.repository_owner }}/remeaudio-whispercpp
+  OWNER_LC: ${{ github.repository_owner || '' }} # placeholder, replaced below
+  IMAGE_NAME: remeaudio-whispercpp
   DOCKERFILE: ./remedios/apis/audio/Dockerfile_whispercpp
   CONTEXT: ./
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
@@ -56,7 +57,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ env.DO_PUSH == 'true' }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.ARCH_TAG_AMD64 }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.ARCH_TAG_ARM64 }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/$(echo "${{ env.OWNER }}" | tr '[:upper:]' '[:lower:]')/${{ env.IMAGE_NAME }}:${{ env.ARCH_TAG_AMD64 }}
+            ${{ env.REGISTRY }}/$(echo "${{ env.OWNER }}" | tr '[:upper:]' '[:lower:]')/${{ env.IMAGE_NAME }}:${{ env.ARCH_TAG_ARM64 }}
+            ${{ env.REGISTRY }}/$(echo "${{ env.OWNER }}" | tr '[:upper:]' '[:lower:]')/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           no-cache: true
