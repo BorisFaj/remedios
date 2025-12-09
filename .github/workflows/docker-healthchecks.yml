@@ -21,7 +21,7 @@ jobs:
         include:
           - name: remeaudio
             context: remedios
-            dockerfile: remedios/apis/Dockerfile_audio
+            dockerfile: remedios/apis/Dockerfile_whispercpp
             port: 8001
             health: /health
             env: >
