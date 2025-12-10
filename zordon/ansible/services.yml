@@ -63,28 +63,28 @@
         src: ../deploy/audio_whispercpp.yaml
         dest: "{{ whisper_cpp_manifest }}"
         mode: "0644"
-      when: (deploy_remeaudio | default(false) | bool) == true
+      when: (deploy_whisper_cpp | default(false) | bool) == true
 
     - name: Copiar manifiesto de whisper-turbo
       copy:
         src: ../deploy/audio_whisperturbo.yaml
         dest: "{{ whisper_turbo_manifest }}"
         mode: "0644"
-      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+      when: (deploy_whisper_turbo | default(false) | bool) == true
 
     - name: Aplicar manifiesto de whisper-turbo
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ whisper_turbo_manifest }}
-      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+      when: (deploy_whisper_turbo | default(false) | bool) == true
 
     - name: Reiniciar deployment whisper-turbo para coger cambios
       command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/whisper-turbo -n remedios
       register: restart_audio_turbo
       changed_when: "'restarted' in restart_audio_turbo.stdout or restart_audio_turbo.rc == 0"
-      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+      when: (deploy_whisper_turbo | default(false) | bool) == true
 
     - name: Esperar rollout de whisper-turbo
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-turbo -n remedios
-      when: (deploy_remeaudio_turbo | default(false) | bool) == true
+      when: (deploy_whisper_turbo | default(false) | bool) == true
 
     - name: Copiar .secrets al master
       copy:
@@ -150,14 +150,14 @@
 
     - name: Aplicar manifiesto de whisper-cpp
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ whisper_cpp_manifest }}
-      when: (deploy_remeaudio | default(false) | bool) == true
+      when: (deploy_whisper_cpp | default(false) | bool) == true
 
     - name: Reiniciar deployment whisper-cpp para coger cambios
       command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/whisper-cpp -n remedios
       register: restart_audio
       changed_when: "'restarted' in restart_audio.stdout or restart_audio.rc == 0"
-      when: (deploy_remeaudio | default(false) | bool) == true
+      when: (deploy_whisper_cpp | default(false) | bool) == true
 
     - name: Esperar rollout de whisper-cpp
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-cpp -n remedios
-      when: (deploy_remeaudio | default(false) | bool) == true
+      when: (deploy_whisper_cpp | default(false) | bool) == true

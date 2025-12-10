@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: remeaudio-config
+  name: whisper-cpp-config
   namespace: remedios
 data:
   KAFKA_TOPIC: "whatsapp-audio"
-  KAFKA_GROUP_ID: "remeaudio"
+  KAFKA_GROUP_ID: "whatsapp-audio-cpp"
   WHISPER_MODEL: "/app/ggml-large-v3-turbo-q5_0.bin"
   WHISPER_MODEL_REPO: "ggerganov/whisper.cpp"
 ---
@@ -43,7 +43,7 @@ spec:
         - configMapRef:
             name: remedios-config
         - configMapRef:
-            name: remeaudio-config
+            name: whisper-cpp-config
         - secretRef:
             name: remedios-secrets
         ports:

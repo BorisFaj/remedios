@@ -30,5 +30,5 @@ WORKDIR /app
 ENV PATH="/app/remedios/.venv/bin:${PATH}"
 ENV WHISPER_BACKEND=turbo
 
-# Ejecutar servicio HTTP de remeaudio (backend turbo)
+# Ejecutar servicio HTTP de audio (backend turbo)
 CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio.whisper_turbo.service"]

@@ -1,6 +1,5 @@
 from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer, extract_audio
-from remedios.commons.stt.whisper import transcribe
-from remedios.commons.stt.whisper import whisper_cpp
+from remedios.commons.stt.whisper import whisper_cpp, whisper_turbo
 from remedios.commons.log.sender import validate_message
 import logging
 import sys
@@ -47,7 +46,7 @@ def run(request: dict):
 
             # Transcripción turbo (servicio http whisper-turbo)
             try:
-                turbo_txt = transcribe(audio)
+                turbo_txt = whisper_turbo.transcribe(audio)
             except Exception as exc:
                 turbo_txt = f"[error turbo: {exc}]"
 
