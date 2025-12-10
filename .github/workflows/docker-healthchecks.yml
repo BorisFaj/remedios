@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: remeaudio
+          - name: whisper-cpp
             context: .
             dockerfile: remedios/apis/audio/whispercpp/Dockerfile
             port: 8001
@@ -30,6 +30,17 @@ jobs:
               WHISPER_MODEL=ggml-tiny.en.bin
               WHISPER_MODEL_REPO=ggerganov/whisper.cpp
               WHISPER_FAKE=1
+              WHISPER_BACKEND=cpp
+          - name: whisper-turbo
+            context: .
+            dockerfile: remedios/apis/audio/whisper_turbo/Dockerfile
+            port: 8001
+            health: /health
+            env: >
+              GRAPH_API_TOKEN=dummy
+              GRAPH_URL=https://example.com
+              WHISPER_MODEL=openai/whisper-tiny
+              WHISPER_BACKEND=turbo
           - name: remetext
             context: .
             dockerfile: remedios/apis/text/Dockerfile_text
