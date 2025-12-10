@@ -15,6 +15,7 @@ WHISPER_TIMEOUT = float(WHISPER_TIMEOUT) if WHISPER_TIMEOUT not in (None, "", "N
 # Configuración de modelo
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "es")
 WHISPER_SERVER_URL = os.getenv("WHISPER_SERVER_URL", "http://127.0.0.1:9000")
+WHISPER_SERVER_URL_CPP = os.getenv("WHISPER_SERVER_URL_CPP")  # opcional, para dual-call
 
 
 def _to_wav_file(audio: Union[str, bytes, bytearray]) -> bytes:
@@ -56,8 +57,8 @@ def _to_wav_file(audio: Union[str, bytes, bytearray]) -> bytes:
     return out
 
 
-def _transcribe_via_server(wav_bytes: bytes) -> str:
-    url = WHISPER_SERVER_URL.rstrip("/") + "/inference"
+def _transcribe_via_server(wav_bytes: bytes, url: str | None = None) -> str:
+    target = (url or WHISPER_SERVER_URL).rstrip("/") + "/inference"
 
     def _parse_response(resp: requests.Response) -> str:
         try:
@@ -72,7 +73,7 @@ def _transcribe_via_server(wav_bytes: bytes) -> str:
         return resp.text.strip()
 
     try:
-        logger.info("Enviando audio a whisper-server %s", url)
+        logger.info("Enviando audio a whisper-server %s", target)
         # Usa spooled temp para evitar disco en audios pequeños; log si se vuelca a disco
         with tempfile.SpooledTemporaryFile(max_size=2 * 1024 * 1024, suffix=".wav") as tmp:
             tmp.write(wav_bytes)
@@ -80,7 +81,7 @@ def _transcribe_via_server(wav_bytes: bytes) -> str:
             if getattr(tmp, "_rolled", False):
                 logger.info("WAV spooled a disco (size=%d bytes)", len(wav_bytes))
             files = {"file": ("audio.wav", tmp, "audio/wav")}
-            resp = requests.post(url, files=files, timeout=WHISPER_TIMEOUT)
+            resp = requests.post(target, files=files, timeout=WHISPER_TIMEOUT)
             logger.info("Respuesta whisper-server: status=%s", resp.status_code)
             resp.raise_for_status()
             return _parse_response(resp)

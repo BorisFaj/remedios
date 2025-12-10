@@ -82,7 +82,7 @@ Token de GitHub para GHCR
 
 Notas sobre whatsapp-consumer
 -----------------------------
-- El manifiesto `whatsapp-consumer.yaml` solo despliega el consumer (no incluye los servicios `remetext/remeaudio`). Ajusta en el ConfigMap `whatsapp-consumer-config` los endpoints `TEXT_ENDPOINT` y `AUDIO_ENDPOINT` a tus servicios reales antes de aplicarlo.
+- El manifiesto `whatsapp-consumer.yaml` solo despliega el consumer (no incluye los servicios `remetext/whisper-turbo`). Ajusta en el ConfigMap `whatsapp-consumer-config` los endpoints `TEXT_ENDPOINT` y `AUDIO_ENDPOINT` a tus servicios reales antes de aplicarlo.
 
 Cómo obtener el auth key de Tailscale
 -------------------------------------
