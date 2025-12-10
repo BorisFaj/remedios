@@ -1,5 +1,5 @@
 from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer, extract_audio
-from remedios.commons.stt.whisper import whisper_turbo
+from remedios.commons.stt.whisper import transcribe
 from remedios.commons.log.sender import validate_message
 import logging
 import sys
@@ -27,7 +27,7 @@ def run(request: dict):
             logger.info("Audio extraído.")
 
             try:
-                transcript = whisper_turbo.transcribe(audio)
+                transcript = transcribe(audio)
             except Exception as exc:
                 logger.exception("Error transcribiendo audio: %s", exc)
                 transcript = ""
