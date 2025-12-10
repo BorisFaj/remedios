@@ -29,7 +29,7 @@ def run(request: dict):
             try:
                 transcript = whisper_turbo.transcribe(audio)
             except Exception as exc:
-                logger.exception("Error transcribiendo audio")
+                logger.exception("Error transcribiendo audio: %s", exc)
                 transcript = ""
 
             transcript = transcript.strip() if transcript else ""
