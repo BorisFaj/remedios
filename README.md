@@ -1,178 +1,130 @@
-Remedios
-========
+# Remedios
 
-Webhook de WhatsApp desplegado en Kubernetes (k3s) que encola los eventos en Kafka. Se sirve detrás de Traefik con TLS automático de Let’s Encrypt.
+**Webhook de WhatsApp escalable y ligero, diseñado para Oracle Cloud Always Free (ARM).**
 
-Contenido clave
----------------
-- **Aplicación**: Flask (`zordon/server.py`) con endpoints `/webhook` (POST/GET) y `/health`. Envía los mensajes a Kafka (`whatsapp-text` o `whatsapp-audio`) usando `BOOTSTRAP_SERVER`.
-- **Infra**: manifiestos y scripts en `zordon/`:
-  - `master-init.sh`: instala k3s, abre puertos, fija rutas CNI internas, aplica Traefik + ACME y despliega Kafka y la app sobre tailscale0.
-  - `node-init.sh`: añade workers a ese cluster k3s, también sobre tailscale0.
-  - `traefik-acme.yaml`: configura Traefik para certs Let’s Encrypt (HTTP-01).
-  - `remedios.yaml`: Deployment/Service/Ingress de la app.
-  - `kafka.yaml`: despliegue de Kafka/Zookeeper.
-  - `whatsapp-consumer.yaml`: consumidor (si lo necesitas).
+Remedios es una plataforma de procesamiento de mensajes de WhatsApp que despliega una arquitectura de microservicios robusta y escalable sobre Kubernetes (k3s), optimizada para ejecutarse en instancias ARM64 gratuitas de Oracle Cloud (Ampere), pero capaz de escalar horizontalmente añadiendo más nodos.
 
-Requisitos
-----------
-- Ubuntu 22.04+ con acceso root.
-- Dominio público apuntando al IP público de la instancia (A/CNAME para `${DOMAIN}` y, opcional, `www`). Puertos 80 y 443 abiertos.
-- `.secrets` en `zordon/` con:
-  - `DOMAIN=tu.dominio`
-  - `WEBHOOK_VERIFY_TOKEN=token_webhook` (opcional pero recomendado)
-  - `TAILSCALE_AUTHKEY=tskey-...` (auth key de Tailscale)
-  - Para workers: `MASTER_TAILSCALE_IP=100.x.y.z` (IP tailscale del master) y `K3S_TOKEN=<node-token>`; si usas MagicDNS, puedes poner `MASTER_TAILSCALE_HOST=host.tailnet.ts.net` y olvidarte de la IP.
-  - (opcional) `TAILSCALE_HOSTNAME=nombre-personalizado`, `TAILSCALE_MAGICDNS_HOST=host.tailnet.ts.net` para añadirlo como SAN en el API server, `TAILSCALE_UP_FLAGS="--ssh"` si reejecutas sobre una máquina que ya tenía `tailscale up` con SSH u otros flags.
-  - (añade otras vars si las necesitas)
+## 🚀 Objetivo del Proyecto
 
-Despliegue rápido en instancia nueva
-------------------------------------
-1) Clona el repo y ve a `zordon/`.
-2) Crea `.secrets` con las variables anteriores.
-3) Ejecuta el bootstrap:
-   ```bash
-   cd zordon
-   bash master-init.sh
-   ```
-   El script:
-   - Instala k3s.
-   - Detecta (o usa `TAILSCALE_MAGICDNS_HOST`) y añade el MagicDNS del master como SAN TLS para que puedas usar el hostname en kubeconfig/join.
-   - Asegura rutas de red internas (10.42.0.0/16 pods, 10.43.0.0/16 servicios) por la interfaz CNI.
-   - Aplica Traefik con ACME (HTTP-01).
-   - Despliega Kafka (`kafka` namespace).
-   - Despliega Remedios (`remedios` namespace) renderizando `remedios.yaml` con `envsubst`.
+El objetivo principal es permitir el despliegue de un stack completo de procesamiento de IA (Whisper, LLMs, etc.) utilizando recursos gratuitos (Oracle Always Free), sin sacrificar la calidad de la arquitectura.
 
-Workers sobre Tailscale
------------------------
-- Ejecuta `bash master-init.sh` primero. Guarda el `K3S_TOKEN` desde `/var/lib/rancher/k3s/server/node-token` y la IP de tailscale (`tailscale ip -4 | head -n1`) o su MagicDNS (`tailscale status --json | jq -r '.Self.DNSName'`).
-- En cada worker copia `.secrets` con `TAILSCALE_AUTHKEY`, `K3S_TOKEN` y **una** de estas dos: `MASTER_TAILSCALE_IP` (100.x) o `MASTER_TAILSCALE_HOST` (MagicDNS tipo `host.tailnet.ts.net`). Opcionalmente `TAILSCALE_HOSTNAME`. Luego ejecuta `bash node-init.sh`.
-- Todo el tráfico de control y flannel viaja por `tailscale0`; expone 80/443 hacia Internet para Traefik como antes.
+- **Coste Cero**: Funciona en instancias ARM (4 OCPUs, 24GB RAM) de la capa gratuita.
+- **Escalabilidad**: Diseño basado en eventos (Kafka) y Kubernetes. Puedes añadir workers fácilmente.
+- **Seguridad**: Red mesh privada con Tailscale y TLS automático con Traefik.
 
-Despliegue con Ansible (Tailscale automático)
----------------------------------------------
-- Prepara un inventario con grupos `master` y `nodes` (ejemplo en `zordon/ansible/inventory.example.ini`).
-- Crea en tu máquina (no se trackea en git) el fichero `zordon/.secrets` con las variables base (`DOMAIN`, `WEBHOOK_VERIFY_TOKEN`, `TAILSCALE_AUTHKEY`, opcional `TAILSCALE_HOSTNAME`). No pongas `MASTER_TAILSCALE_IP`/`MASTER_TAILSCALE_HOST` ni `K3S_TOKEN`; el playbook los añadirá en destino.
-- Si usas imágenes privadas en GHCR, añade en `.secrets`: `GHCR_USERNAME` (tu usuario de GitHub) y `GHCR_TOKEN` (PAT con `read:packages`). El script creará el secret `ghcr-creds` en el namespace `remedios` y los deployments ya lo referencian en `imagePullSecrets`.
-- Ejecuta desde la raíz del repo:
-  ```bash
-  ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
-  ```
-- El playbook copia los scripts, bootstrappea el master, obtiene automáticamente la IP/MagicDNS de tailscale y el `K3S_TOKEN`, y luego une los workers sin que tengas que pasar manualmente esos datos.
-- Playbook opcional para servicios: cuando el cluster ya está arriba, puedes construir y desplegar `remetext` con imagen local (sin tirar de registry) usando `zordon/ansible/services.yml`. Requisitos: kubeconfig en `/etc/rancher/k3s/k3s.yaml` en el master y `nerdctl` disponible. Ejemplo:
-  ```bash
-  ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml --limit master
-  ```
-  El playbook sincroniza `remedios/`, **asume que la imagen multi-arch ya está publicada** en `ghcr.io/borisfaj/remetext:latest` (se construye en CI), crea los Secrets (`remedios-secrets` con tus vars de `.secrets` y `ghcr-creds` si defines `GHCR_USERNAME`/`GHCR_TOKEN` para pulls privados), aplica `zordon/remetext.yaml` y fuerza un rollout del deployment `remetext` en el namespace `remedios`.
-- Casos de uso:
-  - **Cluster de un solo nodo (solo master)**: define solo el host en `master` (o usa `--limit master`). No es necesario declarar `nodes`.
-  - **Cluster nuevo con varios nodos**: define `master` + `nodes` y ejecuta el playbook completo (sin `--limit`).
-  - **Añadir workers a un cluster existente**: añade los nuevos hosts en el grupo `nodes` y ejecuta `ansible-playbook ... --limit <host1>,<host2>` (o `--limit nodes` si solo hay nuevos). El play contactará al `master` del inventario para leer su IP de tailscale (y su MagicDNS si existe) y el token, sin reprovisionar el master.
-  - **Solo añadir un worker concreto**: deja el `master` definido en el inventario (para poder delegar), añade el host al grupo `nodes` y ejecuta, por ejemplo:
-    ```bash
-    ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml --limit master1,worker2
-    ```
-    Incluir el master en el `--limit` permite delegar la lectura de IP/token sin tocarlo; no se reprovisiona.
+## 🏗 Arquitectura
 
-Token de GitHub para GHCR
--------------------------
-- Ve a GitHub → Settings → Developer settings → Personal access tokens.
-- Crea un token (clásico o fine-grained) con permiso `read:packages`.
-- Usa tu usuario de GitHub como `GHCR_USERNAME` y ese token como `GHCR_TOKEN` en `.secrets`.
+El sistema se compone de varios módulos desacoplados:
 
-Notas sobre whatsapp-consumer
------------------------------
-- El manifiesto `whatsapp-consumer.yaml` solo despliega el consumer (no incluye los servicios `remetext/whisper-turbo`). Ajusta en el ConfigMap `whatsapp-consumer-config` los endpoints `TEXT_ENDPOINT` y `AUDIO_ENDPOINT` a tus servicios reales antes de aplicarlo.
+1.  **Ingress & Seguridad**:
+    - **Traefik**: Ingress Controller que gestiona certificados SSL automáticamente (Let's Encrypt).
+    - **Tailscale**: Crea una red privada segura (Mesh VPN) entre todos los nodos del cluster, sin exponer puertos de gestión a internet.
 
-Cómo obtener el auth key de Tailscale
--------------------------------------
-- Entra a https://login.tailscale.com → Settings → Keys → Generate auth key (idealmente *ephemeral* + reusable si quieres añadir nodos).
-- Usa ese valor como `TAILSCALE_AUTHKEY` en `group_vars/all.yml` o en tus variables de inventario.
+2.  **Event Bus**:
+    - **Kafka**: Desacopla la recepción de mensajes del procesamiento. El webhook solo encola eventos, garantizando alta disponibilidad y baja latencia de respuesta a Meta.
 
-Verificación
-------------
-- Traefik/ACME:
-  ```bash
-  sudo k3s kubectl -n kube-system logs -l app.kubernetes.io/name=traefik -f
-  ```
-  Debes ver el challenge y la emisión para tu dominio; el Secret `remedios-tls` aparecerá en el ns `remedios`.
+3.  **Servicios (Microservicios)**:
+    - **Webhook Server** (`zordon/core/server.py`): Recibe webhooks de WhatsApp y los publica en Kafka.
+    - **Remetext** (`remedios`): Servicio de procesamiento de texto.
+    - **Whisper Worker**: Servicio de transcripción de audio optimizado para ARM64 (usando `whisper.cpp` o `whisper-turbo`).
+    - **Whatsapp Consumer**: Orquesta el flujo de mensajes hacia los servicios correspondientes.
 
-- Certificado:
-  ```bash
-  sudo k3s kubectl -n remedios get secret remedios-tls -o jsonpath='{.data.tls\.crt}' \
-    | base64 -d | openssl x509 -noout -issuer -subject -dates
-  ```
+## 📋 Requisitos Previos
 
-- Salud HTTP/HTTPS:
-  ```bash
-  curl -v https://$DOMAIN/health
-  curl -v "https://$DOMAIN/webhook?hub.mode=subscribe&hub.verify_token=$WEBHOOK_VERIFY_TOKEN&hub.challenge=123"
-  ```
+1.  **Instancia Oracle Cloud**: Ubuntu 22.04 (ARM64 Ampere).
+2.  **Dominio**: Un dominio público apuntando a la IP pública de tu instancia.
+3.  **Tailscale**: Una cuenta de Tailscale y una Auth Key (reusable y efímera recomendada).
+4.  **GitHub Token**: Un Personal Access Token (Classic) con permiso `read:packages` para descargar las imágenes desde GHCR.
 
-- DNS/Challenge:
-  ```bash
-  curl -v http://$DOMAIN/.well-known/acme-challenge/test
-  ```
-  Debe responder 404 desde Traefik sin redirecciones.
+## 🛠 Instalación (Ansible)
 
-- Cluster sobre Tailscale/MagicDNS:
-  ```bash
-  sudo k3s kubectl get nodes -o wide                  # InternalIP 100.x y Ready
-  sudo k3s kubectl get pods -A -o wide                # kube-system/flannel/traefik en Running
-  sudo k3s kubectl cluster-info
-  grep server: /etc/rancher/k3s/k3s.yaml              # Debe apuntar a tu MagicDNS:6443
-  sudo k3s kubectl -n remedios get all                # Recursos de la app
-  sudo k3s kubectl -n kafka get all                   # Kafka
-  sudo k3s kubectl -n remedios exec deploy/whatsapp-consumer -- printenv BOOTSTRAP_SERVER
-  sudo k3s kubectl -n remedios logs deploy/remedios | tail
-  curl -v https://$DOMAIN/health
-  ```
+La infraestructura se despliega automáticamente usando Ansible.
 
-Despliegue manual (si ya tienes k3s)
-------------------------------------
+### 1. Preparación
+
+Clona el repositorio:
 ```bash
-cd zordon
-set -a; . .secrets; set +a
-kubectl apply -n kube-system -f traefik-acme.yaml
-envsubst '$DOMAIN $WEBHOOK_VERIFY_TOKEN' < remedios.yaml | kubectl apply -n remedios -f -
+git clone https://github.com/BorisFaj/remedios.git
+cd remedios
 ```
 
-Notas sobre red
----------------
-- Traefik necesita llegar al API de k8s (`10.43.0.1:443`). Si ves en sus logs `no route to host`, asegúrate de que el host tiene rutas a 10.42.0.0/16 y 10.43.0.0/16 por la interfaz CNI (`cni0`/`flannel.1`). El `cloud-init.sh` ya las instala; en sistemas existentes:
-  ```bash
-  sudo ip route replace 10.43.0.0/16 dev cni0
-  sudo ip route replace 10.42.0.0/16 dev cni0
-  ```
+Crea un archivo `.secrets` en `zordon/.secrets` (este archivo es ignorado por git):
 
-Kafka
------
-- Kafka se despliega en el namespace `kafka` con `kafka.yaml`.
-- El productor Flask usa `BOOTSTRAP_SERVER` del ConfigMap (`kafka.kafka.svc.cluster.local:9092` por defecto).
-- Topics usados: `whatsapp-text`, `whatsapp-audio`.
+```bash
+# zordon/.secrets
+DOMAIN=tu-dominio.com
+WEBHOOK_VERIFY_TOKEN=tu-token-secreto
+TAILSCALE_AUTHKEY=tskey-auth-tu-key
+GHCR_USERNAME=tu-usuario-github
+GHCR_TOKEN=ghp_tu_token_github
+# Opcional: Configuración de Whisper
+WHISPER_MODEL=ggml-large-v3-turbo-q5_0.bin
+```
 
-Referencias rápidas
--------------------
-- Listar recursos:
-  ```bash
-  kubectl -n remedios get all
-  kubectl -n kafka get all
-  ```
-- Logs de la app:
-  ```bash
-  kubectl -n remedios logs deploy/remedios -f
-  ```
-- Consumidor de ejemplo (desde el pod de Kafka):
-  ```bash
-  kubectl -n kafka exec -it deploy/kafka -- \
-    kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic whatsapp-text --from-beginning
-  ```
+### 2. Configurar Inventario
 
-Próximos pasos
---------------
-- Añadir/activar los pipelines de Whisper/GPT (consumidor en `whatsapp_consumer.py` y manifiesto `whatsapp-consumer.yaml`).
-- Documentar credenciales externas necesarias (si aplica).
+Edita `zordon/ansible/inventory.ini`. Para un despliegue "Single Node" (todo en una máquina), solo define el `master`:
 
-Licencia
---------
-MIT. Veja `LICENSE`.
+```ini
+[master]
+tu-usuario@tu-ip-publica
+
+[nodes]
+# Deja esto vacío si solo usas un nodo
+```
+
+### 3. Desplegar Cluster e Infraestructura
+
+Ejecuta el playbook de cluster. Esto instalará k3s, Tailscale, Traefik y Kafka:
+
+```bash
+ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
+```
+
+### 4. Desplegar Servicios
+
+Una vez el cluster esté arriba, despliega los servicios de aplicación (Remedios, Whisper, etc.):
+
+```bash
+ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml
+```
+
+## 📈 Escalabilidad (Añadir Nodos)
+
+Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso si están en otras redes o proveedores.
+
+1.  Añade la IP del nuevo servidor al grupo `[nodes]` en `zordon/ansible/inventory.ini`.
+2.  Ejecuta de nuevo el playbook de cluster:
+    ```bash
+    ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
+    ```
+    El script detectará automáticamente el token del master y unirá el nuevo nodo a través del túnel seguro de Tailscale.
+
+## 📂 Estructura del Proyecto
+
+- `remedios/`: Código fuente de la aplicación (lógica de negocio, servicios de texto).
+- `zordon/`: Infraestructura y despliegue.
+    - `ansible/`: Playbooks de automatización.
+    - `core/`: Componentes base (Webhook Server, Dockerfiles).
+    - `deploy/`: Manifiestos de Kubernetes (YAMLs).
+
+## 🐛 Debugging y Logs
+
+Ver estado de los pods:
+```bash
+kubectl -n remedios get pods
+```
+
+Ver logs del webhook:
+```bash
+kubectl -n remedios logs -l app=remedios -f
+```
+
+Ver logs de Kafka:
+```bash
+kubectl -n kafka logs -l app=kafka -f
+```
+
+## 📄 Licencia
+
+MIT.
