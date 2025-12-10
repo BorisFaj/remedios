@@ -1,5 +1,5 @@
 from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer, extract_audio
-from remedios.commons.stt.whisper import transcribe
+from remedios.commons.stt.whisper import whisper_turbo
 from remedios.commons.log.sender import validate_message
 import logging
 import sys
@@ -26,8 +26,16 @@ def run(request: dict):
             audio = extract_audio(message, phone_number)
             logger.info("Audio extraído.")
 
-            transcription = transcribe(audio)
-            logger.info(f"[IA-Transcription]: {transcription}")
+            try:
+                transcript = whisper_turbo.transcribe(audio)
+            except Exception as exc:
+                logger.exception("Error transcribiendo audio: %s", exc)
+                transcript = ""
 
-            send_text_answer(transcription, message["from"], message["id"], phone_number)
-            validate_message(message["from"], "IA", transcription, "audio")
+            transcript = transcript.strip() if transcript else ""
+            final_msg = transcript or "No pude transcribir tu audio, intenta de nuevo."
+
+            logger.info("[IA-Transcription] result=%s", final_msg)
+
+            send_text_answer(final_msg, message["from"], message["id"], phone_number)
+            validate_message(message["from"], "IA", final_msg, "audio")
