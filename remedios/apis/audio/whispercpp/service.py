@@ -5,7 +5,7 @@ import sys
 
 from flask import Flask, jsonify, request
 
-from remedios.whatsapp.audio_cpp import run
+from remedios.whatsapp.audio import run
 from remedios.commons.stt.whisper.whisper_cpp import WHISPER_SERVER_URL
 
 logging.basicConfig(
