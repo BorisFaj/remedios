@@ -9,8 +9,8 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
-    # Ruta local (controlador) del wallet; pásala con -e oracle_wallet_path=/ruta/al/zip o vía env ORACLE_WALLET_PATH
-    wallet_src: "{{ oracle_wallet_path | default(lookup('env','ORACLE_WALLET_PATH') | default('', true)) }}"
+    # Ruta local (solo en el controlador) del wallet; pásala con -e oracle_wallet_path=/ruta/al/zip
+    wallet_src: "{{ oracle_wallet_path | default('', true) }}"
     wallet_dir: "{{ app_root }}/wallet"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
@@ -133,7 +133,7 @@
       shell: |
         kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
           --from-env-file={{ app_root }}/.secrets \
-          ${wallet_src:+ --from-literal=ORACLE_WALLET_PATH={{ wallet_dir }} } \
+          --from-literal=ORACLE_WALLET_PATH={{ wallet_dir }} \
           ${whisper_backend:+ --from-literal=WHISPER_BACKEND=${whisper_backend} } \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
