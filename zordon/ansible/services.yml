@@ -9,9 +9,8 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
-    # Ruta local (solo en el controlador) del wallet; pásala con -e oracle_wallet_path=/ruta/al/zip
-    wallet_src: "{{ oracle_wallet_path | default('', true) }}"
     wallet_dir: "{{ app_root }}/wallet"
+    oracle_dsn: "{{ lookup('ini', 'ORACLE_DSN type=properties file=' ~ secrets_src) | default('', true) | trim }}"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
@@ -33,6 +32,36 @@
       delegate_to: localhost
       run_once: true
       become: false
+
+    - name: Leer ruta de wallet desde .secrets (ORACLE_WALLET_PATH)
+      set_fact:
+        wallet_src: "{{ lookup('ini', 'ORACLE_WALLET_PATH type=properties file=' ~ secrets_src) | default('', true) }}"
+
+    - name: Validar que el wallet existe en el controlador (si se definió)
+      stat:
+        path: "{{ wallet_src }}"
+      register: wallet_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when: wallet_src | length > 0
+
+    - name: Abortar si la ruta de wallet no existe en el controlador
+      fail:
+        msg: "ORACLE_WALLET_PATH='{{ wallet_src }}' no existe en el controlador. Ajusta la ruta en .secrets a un ZIP válido."
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - not wallet_file.stat.exists
+
+    - name: Abortar si el wallet no es una carpeta (descomprime localmente el zip)
+      fail:
+        msg: "ORACLE_WALLET_PATH debe apuntar a una carpeta (contenido descomprimido del wallet). Ajusta .secrets."
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - wallet_file.stat.exists
+        - not wallet_file.stat.isdir
 
     - name: Crear carpetas de trabajo
       file:
@@ -96,19 +125,15 @@
         dest: "{{ app_root }}/.secrets"
         mode: "0600"
 
-    - name: Copiar wallet de Oracle si existe
-      copy:
-        src: "{{ wallet_src }}"
-        dest: "{{ wallet_dir }}/wallet.zip"
-        mode: "0600"
-      when: wallet_src | length > 0
-
-    - name: Descomprimir wallet de Oracle
-      unarchive:
-        src: "{{ wallet_dir }}/wallet.zip"
-        dest: "{{ wallet_dir }}"
-        remote_src: true
-      when: wallet_src | length > 0
+    - name: Sincronizar wallet de Oracle (carpeta ya descomprimida en el controlador)
+      synchronize:
+        src: "{{ wallet_src }}/"
+        dest: "{{ wallet_dir }}/"
+        delete: yes
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat.exists
+        - wallet_file.stat.isdir
 
     - name: Crear/actualizar secret oracle-wallet desde carpeta descomprimida
       shell: |
@@ -116,7 +141,10 @@
           --from-file={{ wallet_dir }}/ \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
-      when: wallet_src | length > 0
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat.exists
+        - wallet_file.stat.isdir
 
     - name: Validar credenciales de GHCR en .secrets
       shell: |
@@ -137,12 +165,24 @@
         kubectl --kubeconfig={{ kubeconfig }} create ns remedios
       changed_when: false
 
-    - name: Crear/actualizar secret remedios-secrets desde .secrets
+    - name: Crear/actualizar secret remedios-secrets desde .secrets (sin ORACLE_WALLET_PATH)
       shell: |
+        tmp=$(mktemp)
+        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN)=' {{ app_root }}/.secrets > "$tmp"
+        dsn="{{ oracle_dsn }}"
+        if [ -z "$dsn" ] && [ -f "{{ wallet_dir }}/tnsnames.ora" ]; then
+          dsn=$(awk 'match($0,/^[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*=/,a){print a[1]; exit}' {{ wallet_dir }}/tnsnames.ora)
+        fi
+        if [ -z "$dsn" ]; then
+          echo "No se pudo determinar ORACLE_DSN (define ORACLE_DSN en .secrets o revisa tnsnames.ora)" >&2
+          exit 1
+        fi
+        echo "ORACLE_DSN=$dsn" >> "$tmp"
         kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
-          --from-env-file={{ app_root }}/.secrets \
+          --from-env-file="$tmp" \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+        rm -f "$tmp"
 
     - name: Crear/actualizar pull secret ghcr-creds para GHCR (si hay credenciales)
       shell: |
