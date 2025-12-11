@@ -2,3 +2,4 @@ psycopg2-binary
 sqlalchemy
 requests
 Flask
+oracledb
