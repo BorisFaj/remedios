@@ -4,12 +4,12 @@ on:
   push:
     branches: ["develop"]
     paths:
-      - "zordon/**"
+      - "remedios/core/**"
       - ".github/workflows/build-and-push.yml"
   pull_request:
     branches: ["develop"]
     paths:
-      - "zordon/**"
+      - "remedios/core/**"
       - ".github/workflows/build-and-push.yml"
 
 permissions:
@@ -20,8 +20,8 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: ${{ github.repository_owner }}/remedios
-  DOCKERFILE: ./zordon/core/Dockerfile_server
-  CONTEXT: ./zordon
+  DOCKERFILE: ./remedios/core/Dockerfile
+  CONTEXT: ./remedios
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
 jobs:

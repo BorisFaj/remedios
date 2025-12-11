@@ -44,7 +44,6 @@
         - traefik-acme.yaml
         - kafka.yaml
         - remedios.yaml
-        - whatsapp-consumer.yaml
 
     - name: Copiar .secrets del master desde el controlador
       copy:
