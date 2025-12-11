@@ -24,10 +24,9 @@ El sistema se compone de varios módulos desacoplados:
     - **Kafka**: Desacopla la recepción de mensajes del procesamiento. El webhook solo encola eventos, garantizando alta disponibilidad y baja latencia de respuesta a Meta.
 
 3.  **Servicios (Microservicios)**:
-    - **Webhook Server** (`zordon/core/server.py`): Recibe webhooks de WhatsApp y los publica en Kafka.
+    - **Webhook Server** (`remedios/core/dispatcher.py`): Recibe webhooks de WhatsApp y los publica en Kafka.
     - **Remetext** (`remedios`): Servicio de procesamiento de texto.
     - **Whisper Worker**: Servicio de transcripción de audio optimizado para ARM64 (usando `whisper.cpp` o `whisper-turbo`).
-    - **Whatsapp Consumer**: Orquesta el flujo de mensajes hacia los servicios correspondientes.
 
 ## 📋 Requisitos Previos
 
@@ -102,10 +101,9 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
 
 ## 📂 Estructura del Proyecto
 
-- `remedios/`: Código fuente de la aplicación (lógica de negocio, servicios de texto).
+- `remedios/`: Código fuente de la aplicación (lógica de negocio, servicios de texto y core).
 - `zordon/`: Infraestructura y despliegue.
     - `ansible/`: Playbooks de automatización.
-    - `core/`: Componentes base (Webhook Server, Dockerfiles).
     - `deploy/`: Manifiestos de Kubernetes (YAMLs).
 
 ## 🐛 Debugging y Logs
