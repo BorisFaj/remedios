@@ -4,16 +4,14 @@ from kafka import KafkaProducer
 import json
 import sys
 import logging
-from dotenv import load_dotenv, find_dotenv
 import os
 import atexit
 import uuid
 
-load_dotenv(find_dotenv(".env"))
-
 # logs
 sys.stdout.reconfigure(line_buffering=True)
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logger = logging.getLogger()
 
 # Kafka
 bootstrap = os.environ.get("BOOTSTRAP_SERVER")
@@ -29,11 +27,14 @@ hostname = str.encode(socket.gethostname())
 # Flask
 app = Flask(__name__)
 
+
 def on_success(metadata):
     app.logger.info(f"✅ Enviado a '{metadata.topic}' en offset {metadata.offset}")
 
+
 def on_error(e):
   app.logger.info(f"❌ Error enviando mensaje a Kafka: {e}")
+
 
 def verificar_webhook():
     mode = request.args.get("hub.mode")
@@ -47,26 +48,6 @@ def verificar_webhook():
         else:
             return jsonify({"status": "error", "message": "Token de verificación inválido"}), 403
     return jsonify({"status": "error", "message": "Parámetros faltantes"}), 400
-
-
-def get_topic(data):
-    """Determina el topic correcto del mensaje."""
-
-    changes = data["entry"][0].get("changes", [])
-    value = changes[0].get("value", {})
-
-    if "statuses" in value:
-        return "whatsapp-text"
-
-    message = value["messages"][0]
-    message_type = message.get("type")
-
-    if message_type == "text":
-        return "whatsapp-text"
-    elif message_type == "audio":
-        return "whatsapp-audio"
-    else:
-        return "whatsapp-text"
 
 
 def build_key(data):
@@ -91,6 +72,32 @@ def build_key(data):
     return key.encode("utf-8")
 
 
+def get_topic(data):
+
+    routing = {
+        "audio": "transcription_requests",
+        "text": "answer_request",
+    }
+
+    entry = data.get("entry", [{}])[0]
+    changes = entry.get("changes", [{}])
+    value = changes[0].get("value", {})
+
+    # Si hay statuses, siempre answer_request
+    if "statuses" in value:
+        return "answer_request"
+
+    message = (
+        value.get("messages", [{}])[0]
+        if isinstance(value.get("messages"), list) and value.get("messages")
+        else {}
+    )
+
+    message_type = message.get("type", "text")
+
+    return routing.get(message_type, "answer_request")
+
+
 def send_to_kafka(data, topic):
     """Encola el mensaje en Kafka."""
 
@@ -105,6 +112,7 @@ def send_to_kafka(data, topic):
     future.add_callback(on_success)
     future.add_errback(on_error)
     producer.flush()
+
 
 @app.route("/webhook", methods=["POST", "GET"])
 def webhook():
