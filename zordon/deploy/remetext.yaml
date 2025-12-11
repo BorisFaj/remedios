@@ -38,8 +38,19 @@ spec:
             name: remetext-config
         - secretRef:
             name: remedios-secrets
+        env:
+        - name: ORACLE_WALLET_PATH
+          value: /opt/oracle/wallet
         ports:
         - containerPort: 8000
+        volumeMounts:
+        - name: oracle-wallet
+          mountPath: /opt/oracle/wallet
+          readOnly: true
+      volumes:
+      - name: oracle-wallet
+        secret:
+          secretName: oracle-wallet
 ---
 apiVersion: v1
 kind: Service
