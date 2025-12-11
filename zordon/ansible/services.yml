@@ -9,6 +9,9 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
+    # Ruta local (controlador) del wallet; pásala con -e oracle_wallet_path=/ruta/al/zip o vía env ORACLE_WALLET_PATH
+    wallet_src: "{{ oracle_wallet_path | default(lookup('env','ORACLE_WALLET_PATH') | default('', true)) }}"
+    wallet_dir: "{{ app_root }}/wallet"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
@@ -40,6 +43,7 @@
         - "{{ app_root }}"
         - "{{ src_dir }}"
         - "{{ app_root }}/deploy"
+        - "{{ wallet_dir }}"
 
     - name: Sincronizar código de remedios al master
       synchronize:
@@ -92,6 +96,20 @@
         dest: "{{ app_root }}/.secrets"
         mode: "0600"
 
+    - name: Copiar wallet de Oracle si existe
+      copy:
+        src: "{{ wallet_src }}"
+        dest: "{{ wallet_dir }}/wallet.zip"
+        mode: "0600"
+      when: wallet_src | length > 0
+
+    - name: Descomprimir wallet de Oracle
+      unarchive:
+        src: "{{ wallet_dir }}/wallet.zip"
+        dest: "{{ wallet_dir }}"
+        remote_src: true
+      when: wallet_src | length > 0
+
     - name: Validar credenciales de GHCR en .secrets
       shell: |
         set -a
@@ -115,6 +133,7 @@
       shell: |
         kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
           --from-env-file={{ app_root }}/.secrets \
+          ${wallet_src:+ --from-literal=ORACLE_WALLET_PATH={{ wallet_dir }} } \
           ${whisper_backend:+ --from-literal=WHISPER_BACKEND=${whisper_backend} } \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
