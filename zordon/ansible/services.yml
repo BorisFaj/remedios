@@ -110,6 +110,14 @@
         remote_src: true
       when: wallet_src | length > 0
 
+    - name: Crear/actualizar secret oracle-wallet desde carpeta descomprimida
+      shell: |
+        kubectl --kubeconfig={{ kubeconfig }} create secret generic oracle-wallet \
+          --from-file={{ wallet_dir }}/ \
+          -n remedios \
+          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+      when: wallet_src | length > 0
+
     - name: Validar credenciales de GHCR en .secrets
       shell: |
         set -a
@@ -133,8 +141,6 @@
       shell: |
         kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
           --from-env-file={{ app_root }}/.secrets \
-          --from-literal=ORACLE_WALLET_PATH={{ wallet_dir }} \
-          ${whisper_backend:+ --from-literal=WHISPER_BACKEND=${whisper_backend} } \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
 

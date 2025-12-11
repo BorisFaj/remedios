@@ -108,7 +108,7 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
 
 ### Logs en Oracle
 - El módulo `remedios/log` persiste usuarios, mensajes y jobs en Oracle usando wallet (Client Credentials).
-- Variables necesarias: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`) y `ORACLE_WALLET_PATH` (carpeta o zip). Opcional: `ORACLE_WALLET_PASSWORD`.
+- Variables necesarias en `.secrets`: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`). El wallet se monta como secreto en `/opt/oracle/wallet` y el pod exporta `ORACLE_WALLET_PATH=/opt/oracle/wallet`. Opcional: `ORACLE_WALLET_PASSWORD`.
 
 ## 🐛 Debugging y Logs
 
