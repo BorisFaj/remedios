@@ -1,6 +1,5 @@
 from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer
 from remedios.commons.chat.fool import ask
-from remedios.log.sender import validate_message, get_embeddings_context
 import logging
 import sys
 
@@ -24,15 +23,13 @@ def run(request: dict):
         if message:
             if message.get("type") == "text":
                 _message_body = message['text']['body']
-                emb = get_embeddings_context(message["from"], _message_body)
-                respuesta_chatgpt = ask(emb)
+                respuesta_chatgpt = ask(_message_body)
 
                 logger.info(f"[HUMAN]: {_message_body}")
                 logger.info(f"[IA-Chat]: {respuesta_chatgpt}")
 
                 send_text_answer(respuesta_chatgpt, message["from"], message["id"], phone_number)
-                validate_message(message["from"], "IA", _message_body, "text")
-                validate_message("IA", message["from"], respuesta_chatgpt, "text")
+
                 logger.debug("Text answer sent ;)")
             else:
                 logger.debug("pos na")

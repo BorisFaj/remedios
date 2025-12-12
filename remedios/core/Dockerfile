@@ -5,7 +5,7 @@ WORKDIR /app
 COPY core/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY core/dispatcher.py /app/
+COPY core/*.py /app/
 
 EXPOSE 3000
 
