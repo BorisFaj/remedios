@@ -1,12 +1,16 @@
 FROM python:3.10-slim
 
+ARG APP_SRC=remedios
+ENV VENV=/app/.venv
+ENV PYTHONPATH=/app
+
 WORKDIR /app
 
-COPY core/requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+COPY ${APP_SRC}/ /app/${APP_SRC}/
 
-COPY core/*.py /app/
+RUN pip install --no-cache-dir -r /app/${APP_SRC}/requirements.txt
+RUN pip install --no-cache-dir -r /app/${APP_SRC}/core/requirements.txt
 
 EXPOSE 3000
 
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:3000", "dispatcher:app"]
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:3000", "remedios.core.dispatcher:app"]
