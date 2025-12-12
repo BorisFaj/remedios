@@ -64,7 +64,7 @@ def get_phone_number(request: dict) -> str:
         .get("changes", [{}])[0]
         .get("value", {})
     )
-    # Remitente real del mensaje
+    # Remitente real del mensaje (WA ID del usuario)
     messages = value.get("messages", [])
     if isinstance(messages, list) and messages:
         sender = messages[0].get("from")
@@ -79,6 +79,17 @@ def get_phone_number(request: dict) -> str:
             return wa_id
 
     raise ValueError("No se pudo extraer el teléfono del remitente")
+
+
+def get_number_id(request: dict) -> str | None:
+    """Devuelve el phone_number_id (número de negocio asignado por Meta)."""
+    return (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+        .get("metadata", {})
+        .get("phone_number_id")
+    )
 
 
 def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -> None:
