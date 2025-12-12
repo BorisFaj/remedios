@@ -14,6 +14,7 @@
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
+    remedios_manifest: "{{ app_root }}/deploy/remedios.yaml"
     whisper_cpp_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
     whisper_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
   tasks:
@@ -83,6 +84,13 @@
           - "--exclude=.venv"
           - "--exclude=__pycache__"
           - "--exclude=.git"
+
+    - name: Copiar manifiesto de remedios (dispatcher)
+      copy:
+        src: ../deploy/remedios.yaml
+        dest: "{{ remedios_manifest }}"
+        mode: "0644"
+      when: (deploy_remedios | default(false) | bool) == true
 
     - name: Copiar manifiesto de remetext
       copy:
@@ -198,6 +206,34 @@
           --docker-password="$GHCR_TOKEN" \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+
+    - name: Renderizar manifiesto de remedios con variables de .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        if [ -z "${DOMAIN:-}" ] || [ -z "${WEBHOOK_VERIFY_TOKEN:-}" ]; then
+          echo "DOMAIN y WEBHOOK_VERIFY_TOKEN deben estar definidos en {{ app_root }}/.secrets" >&2
+          exit 1
+        fi
+        envsubst < {{ remedios_manifest }} > /tmp/remedios.rendered.yaml
+      args:
+        executable: /bin/bash
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Aplicar manifiesto de remedios
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/remedios.rendered.yaml
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Reiniciar deployment remedios para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remedios -n remedios
+      register: restart_remedios
+      changed_when: "'restarted' in restart_remedios.stdout or restart_remedios.rc == 0"
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Esperar rollout de remedios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remedios -n remedios
+      when: (deploy_remedios | default(false) | bool) == true
 
     - name: Aplicar manifiesto de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remetext.yaml

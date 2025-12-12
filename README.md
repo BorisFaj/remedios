@@ -74,7 +74,7 @@ tu-usuario@tu-ip-publica
 
 ### 3. Desplegar Cluster e Infraestructura
 
-Ejecuta el playbook de cluster. Esto instalará k3s, Tailscale, Traefik y Kafka:
+Ejecuta el playbook de cluster. Esto instalará k3s, Tailscale, Traefik y Kafka (solo infraestructura, sin desplegar los servicios de aplicación):
 
 ```bash
 ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
@@ -82,7 +82,7 @@ ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
 
 ### 4. Desplegar Servicios
 
-Una vez el cluster esté arriba, despliega los servicios de aplicación (Remedios, Whisper, etc.):
+Una vez el cluster esté arriba, despliega los servicios de aplicación (dispatcher del core, Remetext, Whisper, etc.):
 
 ```bash
 ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml

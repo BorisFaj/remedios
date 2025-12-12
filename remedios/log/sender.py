@@ -172,10 +172,10 @@ def get_engine():
 
 
 def validate_user(phone_number: str, name: str | None = None):
-    """Guarda un usuario si no existe en la base de datos."""
+    """Guarda un usuario si no existe; nunca devuelve None (lanza RuntimeError en fallo)."""
     session = _get_session()
     if not session:
-        return
+        raise RuntimeError("Sesión de base de datos no inicializada (revisa ORACLE_* y wallet)")
     try:
         user = session.query(User).filter_by(phone=phone_number).first()
         if not user:
@@ -183,11 +183,14 @@ def validate_user(phone_number: str, name: str | None = None):
             session.add(new_user)
             session.commit()
             logger.info("👤 Usuario registrado: %s", phone_number)
+            return new_user
         else:
             logger.info("✅ Usuario ya existente: %s", phone_number)
+            return user
     except SQLAlchemyError as exc:
         session.rollback()
         logger.error("❌ Error al guardar usuario %s: %s", phone_number, exc)
+        raise
     finally:
         session.close()
 
@@ -201,7 +204,7 @@ def validate_message(sender: str, receiver: str | None, message: str, message_ty
     try:
         new_message = Message(
             sender_phone=sender,
-            receiver_phone=receiver,
+            receiver_phone=receiver if receiver else None,
             message=message,
             message_type=message_type,
         )

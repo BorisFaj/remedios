@@ -102,8 +102,14 @@ def dispatch_message(data):
     phone = get_phone_number(data)
 
     user = validate_user(phone_number=phone)
-    message_id = validate_message(sender=phone, receiver="bot", message=message, message_type=topic)
+
+    message_id = validate_message(sender=phone, receiver=None, message=message, message_type=topic)
+    if message_id is None:
+        raise RuntimeError("No se pudo registrar el mensaje en la base de datos")
+
     job_id = create_job(job_type=topic, source_message_id=message_id, user_id=user.id)
+    if job_id is None:
+        raise RuntimeError("No se pudo crear el job asociado al mensaje")
     logger.info("Logged to DB")
 
     send_to_kafka(message, topic)
@@ -149,7 +155,7 @@ def webhook():
             return jsonify({"status": "success", "job_id": job_id}), 200
 
         except Exception as e:
-            app.logger.info("❌ Error:", str(e))
+            app.logger.exception("❌ Error: %s", e)
             return jsonify({"status": "error", "message": str(e)}), 500
 
     return jsonify({"status": "error", "message": "Invalid request"}), 400

@@ -39,13 +39,23 @@ def _post_graph(url: str, payload: dict) -> requests.Response:
         raise
 
 
-def get_message(request: dict) -> dict:
-    return (
+def get_message(request: dict) -> str:
+    """Devuelve el texto del primer mensaje; si no hay texto, levanta ValueError."""
+    value = (
         request.get("entry", [{}])[0]
         .get("changes", [{}])[0]
         .get("value", {})
-        .get("messages", [{}])[0]
     )
+    messages = value.get("messages", [])
+    if not isinstance(messages, list) or not messages:
+        return ""
+
+    message = messages[0] or {}
+    text = message.get("text", {})
+    if isinstance(text, dict) and "body" in text:
+        return text.get("body", "") or ""
+
+    raise ValueError(f"Mensaje sin texto: {text}")
 
 
 def get_phone_number(request: dict) -> str:
