@@ -48,7 +48,7 @@ def get_message(request: dict) -> dict:
     )
 
 
-def get_phone_number(request: dict) -> int:
+def get_phone_number(request: dict) -> str:
     return (
         request.get("entry", [{}])[0]
         .get("changes", [{}])[0]

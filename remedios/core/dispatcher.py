@@ -7,6 +7,8 @@ import logging
 import os
 import atexit
 import uuid
+from remedios.whatsapp.handler import get_phone_number, get_message
+from remedios.log.sender import validate_user, validate_message, create_job
 
 # logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -98,8 +100,22 @@ def get_topic(data):
     return routing.get(message_type, "answer_request")
 
 
+def dispatch_message(data):
+    topic = get_topic(data)
+    message = get_message(data)
+    phone = get_phone_number(data)
+
+    user = validate_user(phone_number=phone)
+    message_id = validate_message(sender=phone, receiver="bot", message=message, message_type=topic)
+    job_id = create_job(job_type=topic, source_message_id=message_id, user_id=user.id)
+
+    send_to_kafka(data, topic)
+
+
 def send_to_kafka(data, topic):
     """Encola el mensaje en Kafka."""
+
+
 
     payload = json.dumps(data).encode("utf-8")
     key = build_key(data)
@@ -130,10 +146,9 @@ def webhook():
 
             app.logger.info(f"📩 Mensaje recibido: {json.dumps(data, indent=2)}")
 
-            topic = get_topic(data)
-            send_to_kafka(data, topic)
+            dispatch_message(data)
 
-            return jsonify({"status": "success", "topic": topic}), 200
+            return jsonify({"status": "success"}), 200
 
         except Exception as e:
             app.logger.info("❌ Error:", str(e))

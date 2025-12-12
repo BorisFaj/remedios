@@ -7,7 +7,6 @@ from pathlib import Path
 
 from sqlalchemy import (
     Column,
-    DateTime,
     ForeignKey,
     Identity,
     Integer,
@@ -172,7 +171,7 @@ def get_engine():
     return engine
 
 
-def check_user(phone_number: str, name: str | None = None):
+def validate_user(phone_number: str, name: str | None = None):
     """Guarda un usuario si no existe en la base de datos."""
     session = _get_session()
     if not session:
@@ -193,14 +192,11 @@ def check_user(phone_number: str, name: str | None = None):
         session.close()
 
 
-def validate_message(sender: str, receiver: str, message: str, message_type: str = "text"):
-    """Guarda un mensaje en la base de datos."""
+def validate_message(sender: str, receiver: str | None, message: str, message_type: str,) -> int | None:
+    """Guarda un mensaje en la base de datos y devuelve su id."""
     session = _get_session()
     if not session:
-        return
-
-    check_user(sender)
-    check_user(receiver)
+        return None
 
     try:
         new_message = Message(
@@ -211,60 +207,37 @@ def validate_message(sender: str, receiver: str, message: str, message_type: str
         )
         session.add(new_message)
         session.commit()
-        logger.info("📩 Mensaje tipo %s registrado en la base de datos ✅", message_type)
+        logger.info("📩 Mensaje tipo %s registrado con id=%s ✅", message_type, new_message.id)
+        return new_message.id
     except SQLAlchemyError as exc:
         session.rollback()
-        logger.error("❌ Error al insertar en la base de datos: %s", exc)
+        logger.error("❌ Error al insertar mensaje en la base de datos: %s", exc)
+        return None
     finally:
         session.close()
 
 
-def __get_last_text_messages(phone_number: str, n: int = 10):
-    """Devuelve los últimos N mensajes de texto enviados o recibidos por un usuario."""
+
+def create_job(job_type: str, source_message_id: int, user_id: int | None = None,) -> int | None:
+    """Crea un job asociado a un mensaje y devuelve su id."""
     session = _get_session()
     if not session:
-        return []
+        return None
+
     try:
-        messages = (
-            session.query(Message)
-            .filter(
-                (Message.sender_phone == phone_number) | (Message.receiver_phone == phone_number),
-                Message.message_type == "text",
-            )
-            .order_by(Message.created_at.desc())
-            .limit(n)
-            .all()
+        job = Job(
+            job_type=job_type,
+            status="queued",
+            source_message_id=source_message_id,
+            user_id=user_id,
         )
-        return list(reversed(messages))
+        session.add(job)
+        session.commit()
+        logger.info("🧵 Job %s creado para message_id=%s", job.id, source_message_id)
+        return job.id
     except SQLAlchemyError as exc:
-        logger.error("❌ Error al obtener la conversación de %s: %s", phone_number, exc)
-        return []
+        session.rollback()
+        logger.error("❌ Error al crear job para message_id=%s: %s", source_message_id, exc)
+        return None
     finally:
         session.close()
-
-
-def get_context():
-    return "Eres un asistente conversacional de WhatsApp llamado 'Remedios', diseñada para ayudar a los usuarios con reservas, consultas generales y soporte básico. Usa un tono amigable, informal y profesional, como si fueras un amigo conocedor que ayuda rápidamente. Responde siempre en el idioma del mensaje del usuario. Limita tus respuestas a 2-3 frases cortas, a menos que el usuario solicite más detalles. Si no entiendes la solicitud o no puedes responder, di algo como: 'Lo siento, no entendí bien. ¿Podrías darme más detalles o reformular tu pregunta?' Si el usuario pide una reserva, pregunta por los detalles necesarios (fecha, hora, servicio, ubicación) y confirma la acción, o deriva a un agente humano si no puedes completarla. Evita dar opiniones personales, consejos médicos, legales o financieros, y no respondas a preguntas sobre temas sensibles o éticos; en su lugar, sugiere consultar a un profesional."
-
-
-def get_embeddings_context(phone_number, new_message, bot_name="Remedios", user_name="User"):
-    """Devuelve la conversación formateada con el usuario y el bot."""
-    historial = __get_last_text_messages(phone_number)
-    logger.info("(%s)[HISTORIAL]: %s", phone_number, historial)
-    formatted_history = [f"[SYSTEM]: {get_context()}"]
-
-    for msg in historial:
-        if msg.sender_phone == phone_number:
-            formatted_history.append(f"[{user_name}]: {msg.message}")
-        else:
-            formatted_history.append(f"[{bot_name}]: {msg.message}")
-
-    formatted_history.append(f"[{user_name}]: {new_message}")
-    formatted_history.append(f"[{bot_name}]: ")
-
-    return "\n".join(formatted_history)
-
-
-def get_engine():
-    """Devuelve el engine activo (o None si no se configuró)."""
-    return engine
