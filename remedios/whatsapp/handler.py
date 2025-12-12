@@ -59,13 +59,26 @@ def get_message(request: dict) -> str:
 
 
 def get_phone_number(request: dict) -> str:
-    return (
+    value = (
         request.get("entry", [{}])[0]
         .get("changes", [{}])[0]
         .get("value", {})
-        .get("metadata", {})
-        .get("phone_number_id")
     )
+    # Remitente real del mensaje
+    messages = value.get("messages", [])
+    if isinstance(messages, list) and messages:
+        sender = messages[0].get("from")
+        if sender:
+            return sender
+
+    # Fallback: wa_id en contacts
+    contacts = value.get("contacts", [])
+    if isinstance(contacts, list) and contacts:
+        wa_id = contacts[0].get("wa_id")
+        if wa_id:
+            return wa_id
+
+    raise ValueError("No se pudo extraer el teléfono del remitente")
 
 
 def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -> None:
