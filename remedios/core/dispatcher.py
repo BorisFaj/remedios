@@ -119,6 +119,15 @@ def dispatch_message(data):
     number_id = get_number_id(data)
     phone = get_phone_number(data)
 
+    value = (
+        data.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
+    if "statuses" in value and not value.get("messages"):
+        logger.info("Ignorando webhook de status id=%s para phone=%s", msg_id, phone)
+        return None
+
     job_id = log_db(text, phone, topic)
 
     _key = build_key(data)
