@@ -1,9 +1,11 @@
 import logging
 import os
 import sys
+import json
 import tempfile
 import zipfile
 from pathlib import Path
+from datetime import datetime
 
 from sqlalchemy import (
     Column,
@@ -15,10 +17,12 @@ from sqlalchemy import (
     TIMESTAMP,
     create_engine,
     text,
+    select
 )
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
+from remedios.commons.schemas import TextMessage
 from .base import LogBase
 
 # Configuración de logging
@@ -117,6 +121,9 @@ class Message(Base):
     message_type = Column(String(50), nullable=False, default="text")
     created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
 
+    message_id = Column(String(200), unique=True)
+    number_id = Column(String(200))
+
     sender = relationship("User", foreign_keys=[sender_phone], back_populates="sent_messages")
     receiver = relationship("User", foreign_keys=[receiver_phone], back_populates="received_messages")
 
@@ -195,7 +202,8 @@ def validate_user(phone_number: str, name: str | None = None):
         session.close()
 
 
-def validate_message(sender: str, receiver: str | None, message: str, message_type: str,) -> int | None:
+def validate_message(sender: str, receiver: str | None, message: str, message_type: str, message_id: str,
+                     number_id: str) -> int | None:
     """Guarda un mensaje en la base de datos y devuelve su id."""
     session = _get_session()
     if not session:
@@ -204,6 +212,8 @@ def validate_message(sender: str, receiver: str | None, message: str, message_ty
     try:
         new_message = Message(
             sender_phone=sender,
+            message_id=message_id,
+            number_id=number_id,
             receiver_phone=receiver if receiver else None,
             message=message,
             message_type=message_type,

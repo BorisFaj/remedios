@@ -97,9 +97,10 @@ def get_topic(data):
 
     return route.get(message_type, "answer_request")
 
-def log_db(message, phone, topic):
+def log_db(message, phone, topic, number_id, msg_id):
     user = validate_user(phone_number=phone)
-    message_id = validate_message(sender=phone, receiver=None, message=message, message_type=topic)
+    message_id = validate_message(sender=phone, receiver=None, message=message, message_type=topic, message_id=msg_id,
+                                  number_id=number_id)
 
     if message_id is None:
         raise RuntimeError("No se pudo registrar el mensaje en la base de datos")
@@ -128,7 +129,7 @@ def dispatch_message(data):
     number_id = get_number_id(data)
     phone = get_phone_number(data)
 
-    job_id = log_db(text, phone, topic)
+    job_id = log_db(text, phone, topic, number_id, msg_id)
 
     _key = build_key(data)
     message = build_message(text, phone, msg_id, number_id)
