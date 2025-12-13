@@ -7,9 +7,12 @@ import logging
 import os
 import atexit
 import uuid
+from datetime import datetime, UTC
+from remedios.commons.schemas import TextMessage
 from remedios.whatsapp.handler import get_phone_number, get_message
 from remedios.log.sender import validate_user, validate_message, create_job
 from remedios.core.routing import route
+
 
 # logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -101,6 +104,7 @@ def dispatch_message(data):
     message = get_message(data)
     phone = get_phone_number(data)
 
+
     user = validate_user(phone_number=phone)
 
     message_id = validate_message(sender=phone, receiver=None, message=message, message_type=topic)
@@ -112,17 +116,19 @@ def dispatch_message(data):
         raise RuntimeError("No se pudo crear el job asociado al mensaje")
     logger.info("Logged to DB")
 
-    send_to_kafka(message, topic)
+    _key = build_key(data)
+    send_to_kafka(phone, message, topic, _key)
     logger.info(f"Sent to kafka, job_id: {job_id}")
 
     return job_id
 
 
-def send_to_kafka(data, topic):
+def send_to_kafka(phone, message, topic, key):
     """Encola el mensaje en Kafka."""
 
-    payload = json.dumps(data).encode("utf-8")
-    key = build_key(data)
+    msg = TextMessage(message_id="WhatsApp", phone=phone, text=message, timestamp=datetime.now(UTC), schema_version=1)
+
+    payload = msg.model_dump_json().encode("utf-8")
 
     future = producer.send(
         topic,

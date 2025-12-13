@@ -2,3 +2,4 @@ sqlalchemy
 requests
 Flask
 oracledb
+pydantic
