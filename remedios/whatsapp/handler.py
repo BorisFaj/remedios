@@ -71,7 +71,7 @@ def get_phone_number(request: dict) -> str:
         if sender:
             return sender
 
-    raise ValueError("No se pudo extraer el teléfono del remitente")
+    raise ValueError(f"No se pudo extraer el teléfono del remitente: {messages}")
 
 
 def get_number_id(request: dict) -> str | None:
