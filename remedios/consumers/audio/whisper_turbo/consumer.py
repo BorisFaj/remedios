@@ -3,6 +3,7 @@ import logging
 import os
 import json
 import time
+from datetime import datetime
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
@@ -72,17 +73,28 @@ def process_message(raw: bytes):
     if base.message_type == "audio":
         msg = AudioMessage.model_validate_json(raw)
         try:
+            if msg.job_id is None:
+                raise InvalidMessageError("job_id requerido en el mensaje")
+            started = time.time()
+            started_at = datetime.utcnow()
             update_job_status(msg.job_id, "processing", None)
 
             transcript = run(msg)
+            duration_ms = int((time.time() - started) * 1000)
+            finished_at = datetime.utcnow()
 
             update_job_status(msg.job_id, "completed", None)
-            save_job_result(msg.job_id, {"transcript": transcript, "audio_id": msg.audio_id},
-                            output_ref="whisper-turbo")
+            save_job_result(
+                msg.job_id,
+                {"transcript": transcript, "audio_id": msg.audio_id},
+                output_ref="whisper-turbo",
+                duration_ms=duration_ms,
+                started_at=started_at,
+                finished_at=finished_at,
+            )
 
         except Exception as exc:
-            if msg.job_id:
-                update_job_status(msg.job_id, "failed", str(exc))
+            update_job_status(msg.job_id, "failed", str(exc))
             raise
     else:
         raise InvalidMessageError(f"Unsupported message_type={base.message_type}")
@@ -130,4 +142,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

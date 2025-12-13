@@ -151,6 +151,9 @@ class JobResult(Base):
     job_id = Column(Integer, ForeignKey("jobs.id"), primary_key=True)
     result_json = Column(Text)
     output_ref = Column(String(2000))
+    duration_ms = Column(Integer)
+    started_at = Column(TIMESTAMP(timezone=False))
+    finished_at = Column(TIMESTAMP(timezone=False))
     created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
 
 
@@ -279,7 +282,9 @@ def update_job_status(job_id: int, status: str, error_message: str | None = None
         session.close()
 
 
-def save_job_result(job_id: int, result: str | dict, output_ref: str | None = None) -> bool:
+def save_job_result(job_id: int, result: str | dict, output_ref: str | None = None,
+                    duration_ms: int | None = None, started_at: datetime | None = None,
+                    finished_at: datetime | None = None) -> bool:
     """Guarda el resultado de un job (sobrescribe si ya existe)."""
     session = _get_session()
     if not session:
@@ -290,8 +295,18 @@ def save_job_result(job_id: int, result: str | dict, output_ref: str | None = No
         if existing:
             existing.result_json = payload
             existing.output_ref = output_ref
+            existing.duration_ms = duration_ms
+            existing.started_at = started_at
+            existing.finished_at = finished_at
         else:
-            jr = JobResult(job_id=job_id, result_json=payload, output_ref=output_ref)
+            jr = JobResult(
+                job_id=job_id,
+                result_json=payload,
+                output_ref=output_ref,
+                duration_ms=duration_ms,
+                started_at=started_at,
+                finished_at=finished_at,
+            )
             session.add(jr)
         session.commit()
         return True
