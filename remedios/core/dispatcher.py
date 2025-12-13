@@ -132,22 +132,22 @@ def dispatch_message(data):
     job_id = log_db(text, phone, topic, number_id, msg_id)
 
     _key = build_key(data)
-    message = build_message(text, phone, msg_id, number_id)
+    message = build_message(text, phone, msg_id, number_id, job_id)
     send_to_kafka(message, _key, topic)
     logger.info(f"Sent to kafka, job_id: {job_id}")
 
     return job_id
 
-def build_message(text, phone, msg_id, number_id) -> TextMessage:
-    msg = TextMessage(
+def build_message(text, phone, msg_id, number_id, job_id) -> TextMessage:
+    return TextMessage(
         text=text,
         phone=phone,
         message_id=msg_id,
         number_id=number_id,
+        job_id=job_id,
         schema_version=1,
         timestamp=datetime.now(timezone.utc),
     )
-    return msg
 
 def send_to_kafka(msg, key, topic):
     """Encola el mensaje en Kafka."""

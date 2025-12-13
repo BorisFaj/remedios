@@ -29,6 +29,7 @@ def run(message: TextMessage):
                              phone_number=message.phone)
 
             logger.debug("Text answer sent ;)")
+            return respuesta_modelo
 
     except Exception as _:
         logger.error("Oye, se nos ha jodido esto")
