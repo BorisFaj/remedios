@@ -9,7 +9,7 @@ import atexit
 import uuid
 from datetime import datetime, UTC
 from remedios.commons.schemas import TextMessage
-from remedios.whatsapp.handler import get_phone_number, get_message
+from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id
 from remedios.log.sender import validate_user, validate_message, create_job
 from remedios.core.routing import route
 
@@ -98,16 +98,10 @@ def get_topic(data):
 
     return route.get(message_type, "answer_request")
 
-
-def dispatch_message(data):
-    topic = get_topic(data)
-    message = get_message(data)
-    phone = get_phone_number(data)
-
-
+def log_db(message, phone, topic):
     user = validate_user(phone_number=phone)
-
     message_id = validate_message(sender=phone, receiver=None, message=message, message_type=topic)
+
     if message_id is None:
         raise RuntimeError("No se pudo registrar el mensaje en la base de datos")
 
@@ -116,18 +110,30 @@ def dispatch_message(data):
         raise RuntimeError("No se pudo crear el job asociado al mensaje")
     logger.info("Logged to DB")
 
+    return job_id
+
+def dispatch_message(data):
+    topic = get_topic(data)
+    text = get_message(data)
+    msg_id = get_message_id(data)
+    number_id = get_number_id(data)
+    phone = get_phone_number(data)
+
+    job_id = log_db(text, phone, topic)
+
     _key = build_key(data)
-    send_to_kafka(phone, message, topic, _key)
+    message = build_message(text, phone, msg_id, number_id)
+    send_to_kafka(message, _key, topic)
     logger.info(f"Sent to kafka, job_id: {job_id}")
 
     return job_id
 
+def build_message(text, phone, msg_id, number_id) -> TextMessage:
+    msg = TextMessage(text=text, phone=phone, message_id=msg_id, number_id =number_id, schema_version=1, timestamp=datetime.now(UTC))
+    return msg
 
-def send_to_kafka(phone, message, topic, key):
+def send_to_kafka(msg, key, topic):
     """Encola el mensaje en Kafka."""
-
-    msg = TextMessage(message_id="WhatsApp", phone=phone, text=message, timestamp=datetime.now(UTC), schema_version=1)
-
     payload = msg.model_dump_json().encode("utf-8")
 
     future = producer.send(

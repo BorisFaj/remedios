@@ -25,7 +25,8 @@ def run(message: TextMessage):
             logger.info(f"[HUMAN]: {message.text}")
             logger.info(f"[IA-Chat]: {respuesta_modelo}")
 
-            send_text_answer(respuesta_modelo, message["from"], message["id"], message.phone)
+            send_text_answer(text=respuesta_modelo, number_id=message.number_id, message_id=message.message_id,
+                             phone_number=message.phone)
 
             logger.debug("Text answer sent ;)")
 

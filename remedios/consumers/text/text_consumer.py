@@ -45,6 +45,7 @@ def load_config() -> Dict[str, str]:
     return {
         "bootstrap": os.environ["BOOTSTRAP_SERVER"],
         "text_topic": os.environ.get("TEXT_TOPIC", route["text"]),
+        "dlq_topic": os.environ.get("DLQ_TOPIC", route["dlq"]),
         "group_id": os.environ.get("GROUP_ID", "whatsapp-consumer"),
     }
 
@@ -87,9 +88,9 @@ def main():
 
     for record in consumer:
         try:
-            process_message(record.value, dlq_producer)
+            process_message(record.value)
             consumer.commit()
-        except ValidationError as e:
+        except InvalidMessageError as e:
             logger.exception("Mensaje inválido topic=%s offset=%s", record.topic, record.offset)
 
             payload = {
