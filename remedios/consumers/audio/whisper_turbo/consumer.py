@@ -1,17 +1,20 @@
-import json
+import threading
 import logging
 import os
-import threading
+import json
+import time
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
-
-import requests
-from kafka import KafkaConsumer
-
+from kafka import KafkaConsumer, KafkaProducer
+from pydantic import ValidationError
+from remedios.core.routing import route
+from remedios.whatsapp.audio import run
+from remedios.commons.schemas import IncomingMessage, AudioMessage, InvalidMessageError
+from remedios.log.sender import update_job_status, save_job_result
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("whisperturbo")
-
+logger = logging.getLogger("whisper-turbo-consumer")
 
 def start_health_server(port: int = 8080):
     class Handler(BaseHTTPRequestHandler):
@@ -25,62 +28,111 @@ def start_health_server(port: int = 8080):
                 self.send_response(404)
                 self.end_headers()
 
-        def log_message(self, format, *args):  # noqa: N802
+        def log_message(self, format, *args):
             return
 
-    server = HTTPServer(("", port), Handler)
+    server = HTTPServer(("0.0.0.0", port), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    logger.info("Health server listening on %s", port)
+    logger.info("Health server en :%s/health", port)
+    return server
 
 
 def load_config() -> Dict[str, str]:
-    required = ["BOOTSTRAP_SERVER", "TEXT_ENDPOINT", "AUDIO_ENDPOINT"]
+    required = ["BOOTSTRAP_SERVER"]
     missing = [key for key in required if not os.environ.get(key)]
     if missing:
         raise RuntimeError(f"Faltan variables requeridas: {', '.join(missing)}")
 
     return {
         "bootstrap": os.environ["BOOTSTRAP_SERVER"],
-        "text_endpoint": os.environ["TEXT_ENDPOINT"],
-        "audio_endpoint": os.environ["AUDIO_ENDPOINT"],
-        "text_topic": os.environ.get("TEXT_TOPIC", "whatsapp-text"),
-        "audio_topic": os.environ.get("AUDIO_TOPIC", "whatsapp-audio"),
-        "group_id": os.environ.get("GROUP_ID", "whatsapp-consumer"),
+        "audio_topic": os.environ.get("AUDIO_TOPIC", route["audio"]),
+        "dlq_topic": os.environ.get("DLQ_TOPIC", route["dlq"]),
+        "group_id": os.environ.get("GROUP_ID", "whisper-turbo-consumer"),
     }
 
 
 def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
     return KafkaConsumer(
-        cfg["text_topic"],
         cfg["audio_topic"],
         bootstrap_servers=cfg["bootstrap"],
         group_id=cfg["group_id"],
-        enable_auto_commit=True,
+        enable_auto_commit=False,
         auto_offset_reset="latest",
-        value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+        value_deserializer=None
     )
 
 
+def process_message(raw: bytes):
+    try:
+        base = IncomingMessage.model_validate_json(raw)
+    except ValidationError as e:
+        raise InvalidMessageError(str(e))
 
+    if base.message_type == "audio":
+        msg = AudioMessage.model_validate_json(raw)
+        if msg.job_id is None:
+            logger.warning("Mensaje sin job_id, se procesa pero no se actualizará el job")
+        try:
+            # Procesar audio
+            transcript = run(msg)
+            
+            if msg.job_id:
+                # Marcar job como completado
+                update_job_status(msg.job_id, "completed", None)
+                # Guardar resultado (transcript)
+                save_job_result(msg.job_id, {"transcript": transcript, "audio_id": msg.audio_id},
+                                output_ref="whisper-turbo")
+                
+        except Exception as exc:
+            if msg.job_id:
+                # Marcar job como fallido
+                update_job_status(msg.job_id, "failed", str(exc))
+            raise
+    else:
+        raise InvalidMessageError(f"Unsupported message_type={base.message_type}")
 
 
 def main():
+    if os.environ.get("HEALTHCHECK_ONLY") == "1":
+        start_health_server()
+        logger.info("Modo healthcheck habilitado, no se inicia el consumer de Kafka")
+        while True:
+            time.sleep(60)
+
     cfg = load_config()
     start_health_server()
 
     consumer = build_consumer(cfg)
-    logger.info(
-        "Consumiendo de topics=%s,%s hacia text=%s audio=%s",
-        cfg["text_topic"],
-        cfg["audio_topic"],
-        cfg["text_endpoint"],
-        cfg["audio_endpoint"],
+    logger.info("Consumiendo de topic=%s", cfg["audio_topic"])
+
+    dlq_producer = KafkaProducer(
+        bootstrap_servers=cfg["bootstrap"],
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )
 
     for record in consumer:
-        dispatch_message(record, cfg)
+        try:
+            process_message(record.value)
+            consumer.commit()
+        except InvalidMessageError as e:
+            logger.exception("Mensaje inválido topic=%s offset=%s", record.topic, record.offset)
+
+            payload = {
+                "error": str(e),
+                "raw": record.value.decode("utf-8", errors="replace"),
+                "topic": record.topic,
+                "partition": record.partition,
+                "offset": record.offset,
+            }
+
+            dlq_producer.send(cfg["dlq_topic"], payload).get(timeout=10)
+            dlq_producer.flush()
+            consumer.commit()
+        except Exception as _:
+            logger.exception("Fallo procesando topic=%s offset=%s", record.topic, record.offset)
 
 
 if __name__ == "__main__":
     main()
+

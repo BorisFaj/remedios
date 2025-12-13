@@ -1,6 +1,7 @@
 from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer, extract_audio
 from remedios.commons.stt.whisper import transcribe
 from remedios.log.sender import validate_message
+from remedios.commons.schemas import AudioMessage
 import logging
 import sys
 
@@ -14,28 +15,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run(request: dict):
-    logger.info("Incoming webhook message")
-    message = get_message(request)
-    phone_number = get_phone_number(request)
-    logger.info(f"from: {phone_number}")
+def run(msg: AudioMessage) -> str:
+    logger.info("Procesando AudioMessage job_id=%s audio_id=%s", msg.job_id, msg.audio_id)
 
-    if message:
-        if message.get("type") == "audio":
-            logger.info("Extrayendo audio...")
-            audio = extract_audio(message, phone_number)
-            logger.info("Audio extraído.")
+    _message_dict = {
+        "audio": {"id": msg.audio_id, "mime_type": msg.mime_type}
+    }
 
-            try:
-                transcript = transcribe(audio)
-            except Exception as exc:
-                logger.exception("Error transcribiendo audio: %s", exc)
-                transcript = ""
+    try:
+        audio_io = extract_audio(_message_dict, msg.phone)
+        transcript = transcribe(audio_io)
+    except Exception as exc:
+        logger.exception("Fallo transcripción job_id=%s. %s", msg.job_id, exc)
+        transcript = ""
 
-            transcript = transcript.strip() if transcript else ""
-            final_msg = transcript or "No pude transcribir tu audio, intenta de nuevo."
+    transcript = transcript.strip() if transcript else ""
+    final_response = transcript or "No pude entender tu audio."
+    logger.info("Transcripcion exitosa")
+        
+    # Enviar respuesta al usuario
+    send_text_answer(final_response, msg.phone, msg.message_id, msg.number_id)
+    
+    return final_response
 
-            logger.info("[IA-Transcription] result=%s", final_msg)
-
-            send_text_answer(final_msg, message["from"], message["id"], phone_number)
-            validate_message(message["from"], "IA", final_msg, "audio")

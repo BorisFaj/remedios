@@ -25,6 +25,29 @@ __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 FFPROBE_BIN = os.environ.get("FFPROBE_BIN", "ffprobe")
 
 
+def get_audio_metadata(request: dict) -> dict:
+    """Extrae metadatos (id, mime_type) del mensaje de audio."""
+    value = (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
+    messages = value.get("messages", [])
+    if not isinstance(messages, list) or not messages:
+        raise ValueError(f"Mensaje no encontrado: {value}")
+
+    message = messages[0] or {}
+    audio_data = message.get("audio", {})
+    
+    if not isinstance(audio_data, dict):
+       raise ValueError(f"Mensaje no contiene audio válido: {message}")
+
+    return {
+        "audio_id": audio_data.get("id"),
+        "mime_type": audio_data.get("mime_type")
+    }
+
+
 def _post_graph(url: str, payload: dict) -> requests.Response:
     """Envia un POST a Graph y loguea cualquier error HTTP o de conexión."""
     try:

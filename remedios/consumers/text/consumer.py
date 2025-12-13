@@ -61,7 +61,7 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
         auto_offset_reset="latest",
         value_deserializer=None
     )
-
+import importlib
 
 def process_message(raw: bytes):
     try:
@@ -77,7 +77,12 @@ def process_message(raw: bytes):
             result = run(msg)
             if msg.job_id:
                 update_job_status(msg.job_id, "completed", None)
-                save_job_result(msg.job_id, {"answer": result, "input": msg.text})
+
+                mod = importlib.import_module(run.__module__)
+                ask_fn = getattr(mod, "ask", None)
+                output_ref = f"{ask_fn.__module__}.{ask_fn.__name__}" if callable(ask_fn) else None
+
+                save_job_result(msg.job_id, {"answer": result, "input": msg.text}, output_ref=output_ref)
         except Exception as exc:
             if msg.job_id:
                 update_job_status(msg.job_id, "failed", str(exc))

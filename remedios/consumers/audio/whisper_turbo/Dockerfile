@@ -31,4 +31,4 @@ ENV PATH="/app/remedios/.venv/bin:${PATH}"
 ENV WHISPER_BACKEND=turbo
 
 # Ejecutar servicio HTTP de audio (backend turbo)
-CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.audio.whisper_turbo.service"]
+CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.audio.whisper_turbo.consumer"]
