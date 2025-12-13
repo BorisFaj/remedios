@@ -254,3 +254,50 @@ def create_job(job_type: str, source_message_id: int, user_id: int | None = None
         return None
     finally:
         session.close()
+
+
+def update_job_status(job_id: int, status: str, error_message: str | None = None) -> bool:
+    """Actualiza el estado de un job existente."""
+    session = _get_session()
+    if not session:
+        return False
+    try:
+        job = session.get(Job, job_id)
+        if not job:
+            logger.warning("Job %s no encontrado, no se actualiza status", job_id)
+            return False
+        job.status = status
+        job.error_message = error_message
+        job.updated_at = datetime.utcnow()
+        session.commit()
+        return True
+    except SQLAlchemyError as exc:
+        session.rollback()
+        logger.error("❌ Error al actualizar job %s: %s", job_id, exc)
+        return False
+    finally:
+        session.close()
+
+
+def save_job_result(job_id: int, result: str | dict, output_ref: str | None = None) -> bool:
+    """Guarda el resultado de un job (sobrescribe si ya existe)."""
+    session = _get_session()
+    if not session:
+        return False
+    try:
+        payload = result if isinstance(result, str) else json.dumps(result)
+        existing = session.get(JobResult, job_id)
+        if existing:
+            existing.result_json = payload
+            existing.output_ref = output_ref
+        else:
+            jr = JobResult(job_id=job_id, result_json=payload, output_ref=output_ref)
+            session.add(jr)
+        session.commit()
+        return True
+    except SQLAlchemyError as exc:
+        session.rollback()
+        logger.error("❌ Error al guardar job_result %s: %s", job_id, exc)
+        return False
+    finally:
+        session.close()

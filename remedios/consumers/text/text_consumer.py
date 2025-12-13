@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from remedios.core.routing import route
 from remedios.whatsapp.text import run
 from remedios.commons.schemas import IncomingMessage, TextMessage, InvalidMessageError
+from remedios.log.sender import update_job_status, save_job_result
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("text-consumer")
@@ -70,7 +71,17 @@ def process_message(raw: bytes):
 
     if base.message_type == "text":
         msg = TextMessage.model_validate_json(raw)
-        run(msg)
+        if msg.job_id is None:
+            logger.warning("Mensaje sin job_id, se procesa pero no se actualizará el job")
+        try:
+            result = run(msg)
+            if msg.job_id:
+                update_job_status(msg.job_id, "completed", None)
+                save_job_result(msg.job_id, {"answer": result, "input": msg.text})
+        except Exception as exc:
+            if msg.job_id:
+                update_job_status(msg.job_id, "failed", str(exc))
+            raise
     else:
         raise InvalidMessageError(f"Unsupported message_type={base.message_type}")
 
