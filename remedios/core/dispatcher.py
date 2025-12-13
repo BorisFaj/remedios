@@ -79,7 +79,6 @@ def build_key(data):
 
 
 def get_topic(data):
-
     entry = data.get("entry", [{}])[0]
     changes = entry.get("changes", [{}])
     value = changes[0].get("value", {})
@@ -113,8 +112,6 @@ def log_db(message, phone, topic):
     return job_id
 
 def dispatch_message(data):
-    topic = get_topic(data)
-
     _value = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
     if "statuses" in _value and not _value.get("messages"):
         status = (_value.get("statuses") or [{}])[0] or {}
@@ -125,6 +122,7 @@ def dispatch_message(data):
         )
         return None
 
+    topic = get_topic(data)
     text = get_message(data)
     msg_id = get_message_id(data)
     number_id = get_number_id(data)
