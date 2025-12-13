@@ -57,5 +57,5 @@ WORKDIR /app
 ENV PATH="/app/remedios/.venv/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
-# Arranque supervisado en Python
-ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.audio.whispercpp.launcher"]
+# Arranque del consumer (levanta whisper-server interno)
+ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.audio.whispercpp.consumer"]
