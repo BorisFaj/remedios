@@ -49,6 +49,9 @@ CREATE TABLE REMEDIOS.job_results (
     job_id        NUMBER PRIMARY KEY,
     result_json   CLOB CHECK (result_json IS JSON),
     output_ref    VARCHAR2(2000),
+    duration_ms   NUMBER,
+    started_at    TIMESTAMP,
+    finished_at   TIMESTAMP,
     created_at    TIMESTAMP DEFAULT SYSTIMESTAMP,
 
     CONSTRAINT fk_job_results_job

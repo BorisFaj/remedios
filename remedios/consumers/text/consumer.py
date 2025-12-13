@@ -3,6 +3,7 @@ import logging
 import os
 import json
 import time
+from datetime import datetime
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
@@ -73,14 +74,30 @@ def process_message(raw: bytes):
         msg = TextMessage.model_validate_json(raw)
 
         try:
+            if msg.job_id is None:
+                raise InvalidMessageError("job_id requerido en el mensaje")
+            started = time.time()
+            started_at = datetime.utcnow()
+            update_job_status(msg.job_id, "processing", None)
+
             result = run(msg)
+            duration_ms = int((time.time() - started) * 1000)
+            finished_at = datetime.utcnow()
+
             update_job_status(msg.job_id, "completed", None)
 
             mod = importlib.import_module(run.__module__)
             ask_fn = getattr(mod, "ask", None)
             output_ref = f"{ask_fn.__module__}.{ask_fn.__name__}" if callable(ask_fn) else None
 
-            save_job_result(msg.job_id, {"answer": result, "input": msg.text}, output_ref=output_ref)
+            save_job_result(
+                msg.job_id,
+                {"answer": result, "input": msg.text},
+                output_ref=output_ref,
+                duration_ms=duration_ms,
+                started_at=started_at,
+                finished_at=finished_at,
+            )
         except Exception as exc:
             update_job_status(msg.job_id, "failed", str(exc))
             raise exc
