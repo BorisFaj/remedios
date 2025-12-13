@@ -7,7 +7,7 @@ import logging
 import os
 import atexit
 import uuid
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from remedios.commons.schemas import TextMessage
 from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id
 from remedios.log.sender import validate_user, validate_message, create_job
@@ -129,7 +129,14 @@ def dispatch_message(data):
     return job_id
 
 def build_message(text, phone, msg_id, number_id) -> TextMessage:
-    msg = TextMessage(text=text, phone=phone, message_id=msg_id, number_id =number_id, schema_version=1, timestamp=datetime.now(UTC))
+    msg = TextMessage(
+        text=text,
+        phone=phone,
+        message_id=msg_id,
+        number_id=number_id,
+        schema_version=1,
+        timestamp=datetime.now(timezone.utc),
+    )
     return msg
 
 def send_to_kafka(msg, key, topic):
