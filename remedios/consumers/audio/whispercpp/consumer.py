@@ -127,7 +127,7 @@ def load_config() -> Dict[str, str]:
         "bootstrap": os.environ["BOOTSTRAP_SERVER"],
         "audio_topic": os.environ.get("AUDIO_TOPIC", route["audio"]),
         "dlq_topic": os.environ.get("DLQ_TOPIC", route["dlq"]),
-        "group_id": os.environ.get("GROUP_ID", "whisper-cpp-consumer"),
+        "group_id": os.environ.get("GROUP_ID", "whatsapp-audio-consumer"),
     }
 
 
@@ -161,6 +161,7 @@ def process_message(raw: bytes):
             transcript = run(msg)
             duration_ms = int((time.time() - started) * 1000)
             finished_at = datetime.utcnow()
+            audio_duration = msg.duration_seconds
 
             update_job_status(msg.job_id, "completed", None)
             save_job_result(
@@ -170,6 +171,7 @@ def process_message(raw: bytes):
                 duration_ms=duration_ms,
                 started_at=started_at,
                 finished_at=finished_at,
+                audio_duration_seconds=audio_duration,
             )
 
         except Exception as exc:

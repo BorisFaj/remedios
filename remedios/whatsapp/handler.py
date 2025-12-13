@@ -149,6 +149,7 @@ def send_text_answer(text: str, phone_number: int, message_id: str, number_id: s
 
 def extract_audio(message: dict, phone_number: int) -> BytesIO:
     audio_id = message["audio"]["id"]
+    duration_hint = message["audio"].get("duration_seconds")
     # mime_type = message["audio"]["mime_type"]
 
     logger.debug(f"buscando audio {audio_id}...")
@@ -162,7 +163,10 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
         content = audio_response.content or b""
         logger.info("audio download status=%s size=%s", audio_response.status_code, len(content))
         if audio_response.status_code == 200:
-            duration = _probe_duration_bytes(content)
+            if duration_hint is not None:
+                duration = duration_hint
+            else:
+                duration = _probe_duration_bytes(content)
             if duration is not None:
                 logger.info("audio duration=%.2fs (ffprobe)", duration)
             else:
