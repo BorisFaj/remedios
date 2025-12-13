@@ -9,6 +9,8 @@ CREATE TABLE REMEDIOS.messages (
     id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sender_phone    VARCHAR2(20),
     receiver_phone  VARCHAR2(20),
+    message_id  VARCHAR2(200),
+    number_id   VARCHAR2(200)
     message         CLOB NOT NULL,
     message_type    VARCHAR2(50) DEFAULT 'text' NOT NULL,
     created_at      TIMESTAMP DEFAULT SYSTIMESTAMP,
@@ -61,3 +63,8 @@ CREATE INDEX REMEDIOS.idx_messages_receiver ON REMEDIOS.messages(receiver_phone)
 CREATE INDEX REMEDIOS.idx_jobs_user_id   ON REMEDIOS.jobs(user_id);
 CREATE INDEX REMEDIOS.idx_jobs_status    ON REMEDIOS.jobs(status);
 CREATE INDEX REMEDIOS.idx_jobs_message   ON REMEDIOS.jobs(source_message_id);
+
+CREATE UNIQUE INDEX REMEDIOS.ux_messages_message_id ON REMEDIOS.messages(message_id);
+
+CREATE INDEX REMEDIOS.idx_messages_number_id ON REMEDIOS.messages(number_id);
+CREATE UNIQUE INDEX REMEDIOS.ux_jobs_msg_type ON REMEDIOS.jobs(source_message_id, job_type);
