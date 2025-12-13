@@ -36,6 +36,8 @@ spec:
           value: "8001"
         - name: WHISPER_BACKEND
           value: "turbo"
+        - name: ORACLE_WALLET_PATH
+          value: /opt/oracle/wallet
         envFrom:
         - configMapRef:
             name: remedios-config
@@ -45,6 +47,10 @@ spec:
             name: remedios-secrets
         ports:
         - containerPort: 8001
+        volumeMounts:
+        - name: oracle-wallet
+          mountPath: /opt/oracle/wallet
+          readOnly: true
         resources:
           requests:
             cpu: "500m"
@@ -54,6 +60,10 @@ spec:
             memory: "6Gi"
       nodeSelector:
         kubernetes.io/arch: arm64
+      volumes:
+      - name: oracle-wallet
+        secret:
+          secretName: oracle-wallet
 ---
 apiVersion: v1
 kind: Service

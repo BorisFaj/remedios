@@ -71,22 +71,17 @@ def process_message(raw: bytes):
 
     if base.message_type == "audio":
         msg = AudioMessage.model_validate_json(raw)
-        if msg.job_id is None:
-            logger.warning("Mensaje sin job_id, se procesa pero no se actualizará el job")
         try:
-            # Procesar audio
+            update_job_status(msg.job_id, "processing", None)
+
             transcript = run(msg)
-            
-            if msg.job_id:
-                # Marcar job como completado
-                update_job_status(msg.job_id, "completed", None)
-                # Guardar resultado (transcript)
-                save_job_result(msg.job_id, {"transcript": transcript, "audio_id": msg.audio_id},
-                                output_ref="whisper-turbo")
-                
+
+            update_job_status(msg.job_id, "completed", None)
+            save_job_result(msg.job_id, {"transcript": transcript, "audio_id": msg.audio_id},
+                            output_ref="whisper-turbo")
+
         except Exception as exc:
             if msg.job_id:
-                # Marcar job como fallido
                 update_job_status(msg.job_id, "failed", str(exc))
             raise
     else:
