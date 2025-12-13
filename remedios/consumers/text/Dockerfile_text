@@ -26,4 +26,4 @@ COPY ${APP_SRC}/ /app/remedios
 WORKDIR /app
 
 # Ejecutar
-CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.text.text_consumer"]
+CMD ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.text.consumer"]
