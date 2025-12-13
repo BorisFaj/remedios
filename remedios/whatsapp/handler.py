@@ -44,13 +44,6 @@ def get_message_id(request: dict) -> str:
         .get("changes", [{}])[0]
         .get("value", {})
     )
-    statuses = value.get("statuses", [])
-    if isinstance(statuses, list) and statuses:
-        status = statuses[0] or {}
-        status_id = status.get("id")
-        if status_id:
-            return status_id
-
     messages = value.get("messages", [])
     if not isinstance(messages, list) or not messages:
         raise ValueError(f"Mensaje no encontrado: {value}")
@@ -86,11 +79,6 @@ def get_phone_number(request: dict) -> str:
         .get("changes", [{}])[0]
         .get("value", {})
     )
-    statuses = value.get("statuses", [])
-    if isinstance(statuses, list) and statuses:
-        recipient = statuses[0].get("recipient_id")
-        if recipient:
-            return recipient
     # Remitente real del mensaje (WA ID del usuario)
     messages = value.get("messages", [])
     if isinstance(messages, list) and messages:
