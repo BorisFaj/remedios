@@ -38,6 +38,21 @@ def _post_graph(url: str, payload: dict) -> requests.Response:
         logger.error("Graph POST %s failed: %s", url, exc)
         raise
 
+def get_message_id(request: dict) -> str:
+    value = (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
+    messages = value.get("messages", [])
+    if not isinstance(messages, list) or not messages:
+        raise ValueError(f"Mensaje no encontrado: {value}")
+
+    message = messages[0] or {}
+    try:
+        return message.get("id")
+    except Exception as _:
+        raise ValueError(f"Mensaje id no encontrado: {message}")
 
 def get_message(request: dict) -> str:
     """Devuelve el texto del primer mensaje; si no hay texto, levanta ValueError."""
@@ -85,7 +100,7 @@ def get_number_id(request: dict) -> str | None:
     )
 
 
-def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -> None:
+def send_text_answer(text: str, phone_number: int, message_id: str, number_id: str) -> None:
 
     if not GRAPH_API_TOKEN or not GRAPH_URL:
         logger.error("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta")
@@ -94,12 +109,12 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
     # Envia una respuesta
     response_data = {
         "messaging_product": "whatsapp",
-        "to": n_to,
+        "to": phone_number,
         "text": {"body": text},
         "context": {"message_id": message_id},
     }
 
-    _post_graph(f"{GRAPH_URL}/{phone_number}/messages", response_data)
+    _post_graph(f"{GRAPH_URL}/{number_id}/messages", response_data)
 
     # Marca el mensaje como leido
     mark_read_data = {
@@ -107,7 +122,7 @@ def send_text_answer(text: str, n_to: int, message_id: int, phone_number: int) -
         "status": "read",
         "message_id": message_id,
     }
-    _post_graph(f"{GRAPH_URL}/{phone_number}/messages", mark_read_data)
+    _post_graph(f"{GRAPH_URL}/{number_id}/messages", mark_read_data)
 
 def extract_audio(message: dict, phone_number: int) -> BytesIO:
     audio_id = message["audio"]["id"]

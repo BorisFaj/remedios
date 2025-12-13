@@ -5,8 +5,9 @@ from datetime import datetime
 
 class IncomingMessage(BaseModel):
     schema_version: int = Field(1, ge=1)
-    message_id: str                 # id del proveedor (WhatsApp, etc.)
-    phone: str
+    message_id: str
+    number_id: str
+    phone: int
     message_type: Literal["text", "audio"]
     timestamp: datetime
 
