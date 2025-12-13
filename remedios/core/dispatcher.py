@@ -114,19 +114,20 @@ def log_db(message, phone, topic):
 
 def dispatch_message(data):
     topic = get_topic(data)
+    value = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
+    if "statuses" in value and not value.get("messages"):
+        status = (value.get("statuses") or [{}])[0] or {}
+        logger.info(
+            "Ignorando webhook de status id=%s for recipient=%s",
+            status.get("id"),
+            status.get("recipient_id"),
+        )
+        return None
+
     text = get_message(data)
     msg_id = get_message_id(data)
     number_id = get_number_id(data)
     phone = get_phone_number(data)
-
-    value = (
-        data.get("entry", [{}])[0]
-        .get("changes", [{}])[0]
-        .get("value", {})
-    )
-    if "statuses" in value and not value.get("messages"):
-        logger.info("Ignorando webhook de status id=%s para phone=%s", msg_id, phone)
-        return None
 
     job_id = log_db(text, phone, topic)
 
