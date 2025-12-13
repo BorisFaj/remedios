@@ -8,8 +8,8 @@ import os
 import atexit
 import uuid
 from datetime import datetime, timezone
-from remedios.commons.schemas import TextMessage
-from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id
+from remedios.commons.schemas import TextMessage, AudioMessage
+from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id, get_audio_metadata
 from remedios.log.sender import validate_user, validate_message, create_job
 from remedios.core.routing import route
 
@@ -97,9 +97,23 @@ def get_topic(data):
 
     return route.get(message_type, "answer_request")
 
-def log_db(message, phone, topic, number_id, msg_id):
+def log_db(content_or_meta, phone, topic, number_id, msg_id):
+    """
+    Loggea en DB.
+    Si es texto, content_or_meta es el texto.
+    Si es audio, content_or_meta es dict con metadata, guardamos algo representativo.
+    """
     user = validate_user(phone_number=phone)
-    message_id = validate_message(sender=phone, receiver=None, message=message, message_type=topic, message_id=msg_id,
+    
+    msg_content = content_or_meta
+    if topic == "transcription_requests" and isinstance(content_or_meta, dict):
+        msg_content = f"[Audio ID: {content_or_meta.get('audio_id')}]"
+    
+    # Asegurar que sea string para la DB
+    if not isinstance(msg_content, str):
+        msg_content = str(msg_content)
+
+    message_id = validate_message(sender=phone, receiver=None, message=msg_content, message_type=topic, message_id=msg_id,
                                   number_id=number_id)
 
     if message_id is None:
@@ -124,31 +138,48 @@ def dispatch_message(data):
         return None
 
     topic = get_topic(data)
-    text = get_message(data)
+    
+    content = None
+    if topic == route["audio"]:
+         content = get_audio_metadata(data)
+    else:
+         content = get_message(data)
+
     msg_id = get_message_id(data)
     number_id = get_number_id(data)
     phone = get_phone_number(data)
-
-    job_id = log_db(text, phone, topic, number_id, msg_id)
-
     _key = build_key(data)
-    message = build_message(text, phone, msg_id, number_id, job_id)
+
+    job_id = log_db(content, phone, topic, number_id, msg_id)
+    message = build_message(content, phone, msg_id, number_id, job_id, topic)
+
     send_to_kafka(message, _key, topic)
     logger.info(f"Sent to kafka, job_id: {job_id}")
 
     return job_id
 
-def build_message(text, phone, msg_id, number_id, job_id) -> TextMessage:
-    return TextMessage(
-        text=text,
-        phone=phone,
-        message_id=msg_id,
-        number_id=number_id,
-        job_id=job_id,
-        schema_version=1,
-        timestamp=datetime.now(timezone.utc),
-    )
+def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessage | AudioMessage:
+    base_args = {
+        "phone": phone,
+        "message_id": msg_id,
+        "number_id": number_id,
+        "job_id": job_id,
+        "schema_version": 1,
+        "timestamp": datetime.now(timezone.utc),
+    }
 
+    if topic == route["audio"]:
+        # content es dict con audio_id, mime_type
+        return AudioMessage(
+            **base_args,
+            audio_id=content["audio_id"],
+            mime_type=content["mime_type"],
+        )
+    else:
+        return TextMessage(
+            **base_args,
+            text=str(content)
+        )
 def send_to_kafka(msg, key, topic):
     """Encola el mensaje en Kafka."""
     payload = msg.model_dump_json().encode("utf-8")
