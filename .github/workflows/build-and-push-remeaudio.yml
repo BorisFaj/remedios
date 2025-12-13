@@ -22,7 +22,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: remeaudio-whispercpp
-  DOCKERFILE: ./remedios/apis/audio/whispercpp/Dockerfile
+  DOCKERFILE: ./remedios/consumers/audio/whispercpp/Dockerfile
   CONTEXT: ./
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
   ARCH_TAG_AMD64: amd64-latest

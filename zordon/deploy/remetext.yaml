@@ -30,7 +30,7 @@ spec:
       - name: remetext
         image: ghcr.io/borisfaj/remetext:latest
         imagePullPolicy: Always
-        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.text.text_service"]
+        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.text.text_consumer"]
         envFrom:
         - configMapRef:
             name: remedios-config
@@ -42,7 +42,7 @@ spec:
         - name: ORACLE_WALLET_PATH
           value: /opt/oracle/wallet
         ports:
-        - containerPort: 8000
+        - containerPort: 8080
         volumeMounts:
         - name: oracle-wallet
           mountPath: /opt/oracle/wallet
@@ -61,5 +61,5 @@ spec:
   selector:
     app: remetext
   ports:
-  - port: 8000
-    targetPort: 8000
+  - port: 8080
+    targetPort: 8080

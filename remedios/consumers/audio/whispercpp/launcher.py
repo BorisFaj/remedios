@@ -94,7 +94,7 @@ def main() -> None:
     app_cmd = [
         sys.executable,
         "-m",
-        "remedios.apis.audio.whispercpp.service",
+        "remedios.consumers.audio.whispercpp.service",
         "--host",
         app_host,
         "--port",

@@ -2,6 +2,7 @@ import threading
 import logging
 import os
 import json
+import time
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
@@ -75,6 +76,12 @@ def process_message(raw: bytes):
 
 
 def main():
+    if os.environ.get("HEALTHCHECK_ONLY") == "1":
+        start_health_server()
+        logger.info("Modo healthcheck habilitado, no se inicia el consumer de Kafka")
+        while True:
+            time.sleep(60)
+
     cfg = load_config()
     start_health_server()
 
