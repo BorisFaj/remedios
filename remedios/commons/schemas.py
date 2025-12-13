@@ -8,7 +8,7 @@ class IncomingMessage(BaseModel):
     message_id: str
     number_id: str
     phone: int
-    job_id: int | None = None
+    job_id: int
     message_type: Literal["text", "audio"]
     timestamp: datetime
 

@@ -71,22 +71,19 @@ def process_message(raw: bytes):
 
     if base.message_type == "text":
         msg = TextMessage.model_validate_json(raw)
-        if msg.job_id is None:
-            logger.warning("Mensaje sin job_id, se procesa pero no se actualizará el job")
+
         try:
             result = run(msg)
-            if msg.job_id:
-                update_job_status(msg.job_id, "completed", None)
+            update_job_status(msg.job_id, "completed", None)
 
-                mod = importlib.import_module(run.__module__)
-                ask_fn = getattr(mod, "ask", None)
-                output_ref = f"{ask_fn.__module__}.{ask_fn.__name__}" if callable(ask_fn) else None
+            mod = importlib.import_module(run.__module__)
+            ask_fn = getattr(mod, "ask", None)
+            output_ref = f"{ask_fn.__module__}.{ask_fn.__name__}" if callable(ask_fn) else None
 
-                save_job_result(msg.job_id, {"answer": result, "input": msg.text}, output_ref=output_ref)
+            save_job_result(msg.job_id, {"answer": result, "input": msg.text}, output_ref=output_ref)
         except Exception as exc:
-            if msg.job_id:
-                update_job_status(msg.job_id, "failed", str(exc))
-            raise
+            update_job_status(msg.job_id, "failed", str(exc))
+            raise exc
     else:
         raise InvalidMessageError(f"Unsupported message_type={base.message_type}")
 
