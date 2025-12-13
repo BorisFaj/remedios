@@ -1,4 +1,4 @@
-from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer
+from remedios.whatsapp.handler import send_text_answer
 from remedios.commons.chat.fool import ask
 from remedios.commons.schemas import TextMessage
 import logging

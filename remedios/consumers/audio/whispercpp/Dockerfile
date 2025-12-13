@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copiar requirements primero para cache (APP_SRC=remedios si el contexto es raíz)
-COPY ${APP_SRC}/apis/requirements.txt ./remedios/
-COPY ${APP_SRC}/apis/audio/whispercpp/requirements.txt ./remedios/requirements_audio.txt
+COPY ${APP_SRC}/requirements.txt ./remedios/
+COPY ${APP_SRC}/consumers/audio/whispercpp/requirements.txt ./remedios/requirements_audio.txt
 
 # Crear venv e instalar dependencias en modo CPU
 RUN python3 -m venv $VENV \
@@ -58,4 +58,4 @@ ENV PATH="/app/remedios/.venv/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
 # Arranque supervisado en Python
-ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.audio.whispercpp.launcher"]
+ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.audio.whispercpp.launcher"]
