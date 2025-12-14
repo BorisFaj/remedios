@@ -160,7 +160,7 @@ def process_message(raw: bytes) -> bool:
         transcript = run(msg)
         duration_ms = int((time.time() - started) * 1000)
         finished_at = datetime.now(timezone.utc)
-        audio_duration = msg.duration_seconds
+        audio_duration_seconds = msg.duration_seconds
 
         update_job_status(msg.job_id, "completed", None)
         save_job_result(
@@ -170,7 +170,7 @@ def process_message(raw: bytes) -> bool:
             duration_ms=duration_ms,
             started_at=started_at,
             finished_at=finished_at,
-            audio_duration=audio_duration,
+            audio_duration_seconds=audio_duration_seconds,
         )
         return True
 
