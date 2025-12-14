@@ -220,8 +220,10 @@ def main():
                 dlq_producer.send(cfg["dlq_topic"], payload).get(timeout=10)
                 dlq_producer.flush()
                 consumer.commit()
-            except Exception as _:
+            except Exception as exc:
                 logger.exception("Fallo procesando topic=%s offset=%s", record.topic, record.offset)
+                # Si ya marcamos el job failed, avanzamos offset para evitar bucles
+                consumer.commit()
     finally:
         server_proc.terminate()
         try:
