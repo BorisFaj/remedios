@@ -153,9 +153,6 @@ def process_message(raw: bytes) -> bool:
 
     msg = AudioMessage.model_validate_json(raw)
     try:
-        if msg.job_id is None:
-            raise InvalidMessageError("job_id requerido en el mensaje")
-
         started = time.time()
         started_at = datetime.now(timezone.utc)
         update_job_status(msg.job_id, "processing", None)
