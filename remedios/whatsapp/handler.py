@@ -147,7 +147,7 @@ def send_text_answer(text: str, phone_number: int, message_id: str, number_id: s
     }
     _post_graph(f"{GRAPH_URL}/{number_id}/messages", mark_read_data)
 
-def extract_audio(message: dict, phone_number: int) -> BytesIO:
+def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None]:
     audio_id = message["audio"]["id"]
     duration_hint = message["audio"].get("duration_seconds")
     # mime_type = message["audio"]["mime_type"]
@@ -175,12 +175,12 @@ def extract_audio(message: dict, phone_number: int) -> BytesIO:
         else:
             logger.error(f"Error al descargar el archivo: {response_url.status_code}")
             logger.error(response_url.text)
-            return io.BytesIO()
+            return b"", None
     else:
         logger.error("URL no recibida :(")
-        return io.BytesIO()
+        return b"", None
 
-    return audio_file
+    return audio_file, duration
 
 
 def _probe_duration_bytes(data: bytes):
