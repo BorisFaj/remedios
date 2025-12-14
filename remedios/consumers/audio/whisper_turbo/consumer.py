@@ -3,7 +3,7 @@ import logging
 import os
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
@@ -76,12 +76,12 @@ def process_message(raw: bytes):
             if msg.job_id is None:
                 raise InvalidMessageError("job_id requerido en el mensaje")
             started = time.time()
-            started_at = datetime.utcnow()
+            started_at = datetime.now(timezone.utc)
             update_job_status(msg.job_id, "processing", None)
 
             transcript = run(msg)
             duration_ms = int((time.time() - started) * 1000)
-            finished_at = datetime.utcnow()
+            finished_at = datetime.now(timezone.utc)
             # Duración de audio si venía en el mensaje
             audio_duration = msg.duration_seconds
 

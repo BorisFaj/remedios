@@ -3,7 +3,7 @@ import logging
 import os
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
@@ -49,7 +49,7 @@ def load_config() -> Dict[str, str]:
         "bootstrap": os.environ["BOOTSTRAP_SERVER"],
         "text_topic": os.environ.get("TEXT_TOPIC", route["text"]),
         "dlq_topic": os.environ.get("DLQ_TOPIC", route["dlq"]),
-        "group_id": os.environ.get("GROUP_ID", "whatsapp-consumer"),
+        "group_id": os.environ.get("GROUP_ID", "whatsapp-text-consumer"),
     }
 
 
@@ -77,12 +77,12 @@ def process_message(raw: bytes):
             if msg.job_id is None:
                 raise InvalidMessageError("job_id requerido en el mensaje")
             started = time.time()
-            started_at = datetime.utcnow()
+            started_at = datetime.now(timezone.utc)
             update_job_status(msg.job_id, "processing", None)
 
             result = run(msg)
             duration_ms = int((time.time() - started) * 1000)
-            finished_at = datetime.utcnow()
+            finished_at = datetime.now(timezone.utc)
 
             update_job_status(msg.job_id, "completed", None)
 
