@@ -1,6 +1,8 @@
 import logging
 import os
 import tempfile
+import io
+import wave
 from typing import Union, Tuple
 
 import ffmpeg
@@ -90,7 +92,20 @@ def _transcribe_via_server(wav_bytes: bytes, url: str | None = None) -> str:
         raise RuntimeError("Error al transcribir con whisper-server") from exc
 
 
-def transcribe(audio: Union[str, bytes, bytearray]) -> Tuple[str, float]:
+def _wav_duration_seconds(wav_bytes: bytes) -> float | None:
+    """Calcula la duración del WAV en segundos usando su cabecera."""
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
+            frames = wav.getnframes()
+            rate = wav.getframerate()
+            if frames > 0 and rate > 0:
+                return frames / float(rate)
+    except Exception:
+        logger.debug("No se pudo calcular duración del WAV", exc_info=True)
+    return None
+
+
+def transcribe(audio: Union[str, bytes, bytearray]) -> Tuple[str, float | None]:
     if WHISPER_FAKE:
         return "transcription-disabled"
 
@@ -98,4 +113,5 @@ def transcribe(audio: Union[str, bytes, bytearray]) -> Tuple[str, float]:
         raise RuntimeError("WHISPER_SERVER_URL no está definido; whisper-server es obligatorio")
 
     wav_bytes = _to_wav_file(audio)
-    return _transcribe_via_server(wav_bytes), 0.0
+    duration = _wav_duration_seconds(wav_bytes)
+    return _transcribe_via_server(wav_bytes), duration
