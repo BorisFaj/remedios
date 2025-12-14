@@ -50,7 +50,7 @@ CREATE TABLE REMEDIOS.job_results (
     result_json   CLOB CHECK (result_json IS JSON),
     output_ref    VARCHAR2(2000),
     duration_ms   NUMBER,
-    audio_duration NUMBER,
+    audio_duration_seconds NUMBER,
     started_at    TIMESTAMP,
     finished_at   TIMESTAMP,
     created_at    TIMESTAMP DEFAULT SYSTIMESTAMP,

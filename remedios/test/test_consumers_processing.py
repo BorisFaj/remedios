@@ -88,7 +88,7 @@ def test_audio_consumer_passes_duration(monkeypatch):
     assert ("completed" in {s for _, s, _ in status_calls})
     assert save_calls, "save_job_result no fue llamado"
     _, kwargs = save_calls[-1]
-    assert kwargs["audio_duration"] == 3
+    assert kwargs["audio_duration_seconds"] == 3
     assert kwargs["duration_ms"] >= 0
     assert kwargs["started_at"] is not None
     assert kwargs["finished_at"] is not None
