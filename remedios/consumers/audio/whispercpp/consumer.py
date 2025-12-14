@@ -171,7 +171,7 @@ def process_message(raw: bytes):
                 duration_ms=duration_ms,
                 started_at=started_at,
                 finished_at=finished_at,
-                audio_duration_seconds=audio_duration,
+                audio_duration=audio_duration,
             )
 
         except Exception as exc:

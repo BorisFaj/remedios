@@ -152,7 +152,7 @@ class JobResult(Base):
     result_json = Column(Text)
     output_ref = Column(String(2000))
     duration_ms = Column(Integer)
-    audio_duration_seconds = Column(Integer)
+    audio_duration = Column(Integer)
     started_at = Column(TIMESTAMP(timezone=False))
     finished_at = Column(TIMESTAMP(timezone=False))
     created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
@@ -285,7 +285,7 @@ def update_job_status(job_id: int, status: str, error_message: str | None = None
 
 def save_job_result(job_id: int, result: str | dict, output_ref: str | None = None,
                     duration_ms: int | None = None, started_at: datetime | None = None,
-                    finished_at: datetime | None = None, audio_duration_seconds: float | None = None) -> bool:
+                    finished_at: datetime | None = None, audio_duration: float | None = None) -> bool:
     """Guarda el resultado de un job (sobrescribe si ya existe)."""
     session = _get_session()
     if not session:
@@ -299,7 +299,7 @@ def save_job_result(job_id: int, result: str | dict, output_ref: str | None = No
             existing.duration_ms = duration_ms
             existing.started_at = started_at
             existing.finished_at = finished_at
-            existing.audio_duration_seconds = audio_duration_seconds
+            existing.audio_duration = audio_duration
         else:
             jr = JobResult(
                 job_id=job_id,
@@ -308,7 +308,7 @@ def save_job_result(job_id: int, result: str | dict, output_ref: str | None = No
                 duration_ms=duration_ms,
                 started_at=started_at,
                 finished_at=finished_at,
-                audio_duration_seconds=audio_duration_seconds,
+                audio_duration=audio_duration,
             )
             session.add(jr)
         session.commit()
