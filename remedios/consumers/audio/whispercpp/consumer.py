@@ -8,7 +8,7 @@ import subprocess
 import sys
 import contextlib
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
@@ -155,12 +155,12 @@ def process_message(raw: bytes):
                 raise InvalidMessageError("job_id requerido en el mensaje")
 
             started = time.time()
-            started_at = datetime.utcnow()
+            started_at = datetime.now(timezone.utc)
             update_job_status(msg.job_id, "processing", None)
 
             transcript = run(msg)
             duration_ms = int((time.time() - started) * 1000)
-            finished_at = datetime.utcnow()
+            finished_at = datetime.now(timezone.utc)
             audio_duration = msg.duration_seconds
 
             update_job_status(msg.job_id, "completed", None)
