@@ -1,7 +1,6 @@
 import json
 import time
 from datetime import datetime, timezone
-import base64
 
 import pytest
 
@@ -94,13 +93,3 @@ def test_audio_consumer_passes_duration(monkeypatch):
     assert kwargs["started_at"] is not None
     assert kwargs["finished_at"] is not None
 
-
-def test_ffprobe_duration_smoke(monkeypatch):
-    from remedios.whatsapp import handler
-
-    # WAV 16-bit mono 16kHz ~0.5s de silencio
-    wav_bytes = base64.b64decode(
-        "UklGRigAAABXQVZFZm10IBAAAAABAAEAgD4AAIA+AAABAAgAZGF0YRgAAAACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgA="
-    )
-    dur = handler._probe_duration_bytes(wav_bytes)
-    assert dur is None or dur > 0, f"ffprobe devolvió {dur}"

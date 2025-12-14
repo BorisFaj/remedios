@@ -1,6 +1,3 @@
-import io
-from io import BytesIO
-
 import requests
 import json
 import os
@@ -149,7 +146,6 @@ def send_text_answer(text: str, phone_number: int, message_id: str, number_id: s
 
 def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None]:
     audio_id = message["audio"]["id"]
-    duration_hint = message["audio"].get("duration_seconds")
     # mime_type = message["audio"]["mime_type"]
 
     logger.debug(f"buscando audio {audio_id}...")
@@ -163,15 +159,8 @@ def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None
         content = audio_response.content or b""
         logger.info("audio download status=%s size=%s", audio_response.status_code, len(content))
         if audio_response.status_code == 200:
-            if duration_hint is not None:
-                duration = duration_hint
-            else:
-                duration = _probe_duration_bytes(content)
-            if duration is not None:
-                logger.info("audio duration=%.2fs (ffprobe)", duration)
-            else:
-                logger.warning("No se pudo obtener duración con ffprobe")
             audio_file = content
+            duration = None
         else:
             logger.error(f"Error al descargar el archivo: {response_url.status_code}")
             logger.error(response_url.text)
@@ -181,35 +170,6 @@ def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None
         return b"", None
 
     return audio_file, duration
-
-
-def _probe_duration_bytes(data: bytes):
-    """Devuelve duración en segundos usando ffprobe desde stdin; None si falla o da 0."""
-    try:
-        cmd = [
-            FFPROBE_BIN,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration,stream=duration",
-            "-of",
-            "json",
-            "-i",
-            "pipe:0",
-        ]
-        out = subprocess.check_output(cmd, input=data, stderr=subprocess.STDOUT)
-        data = jsonlib.loads(out.decode("utf-8", "ignore"))
-        fmt_dur = float(data.get("format", {}).get("duration", 0.0) or 0.0)
-        stream_durs = [
-            float(s.get("duration", 0.0) or 0.0)
-            for s in data.get("streams", [])
-            if isinstance(s, dict)
-        ]
-        dur = max([fmt_dur] + stream_durs) if stream_durs else fmt_dur
-        return dur if dur > 0 else None
-    except Exception as exc:
-        logger.error("ffprobe failed to get duration: %s", exc)
-        return None
 
 # def send_audio_answer(message: dict, phone_number) -> None:
 #     # Transcribir audio
