@@ -64,43 +64,44 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
     )
 
 
-def process_message(raw: bytes):
+def process_message(raw: bytes) -> bool:
     try:
         base = IncomingMessage.model_validate_json(raw)
     except ValidationError as e:
         raise InvalidMessageError(str(e))
 
-    if base.message_type == "audio":
-        msg = AudioMessage.model_validate_json(raw)
-        try:
-            if msg.job_id is None:
-                raise InvalidMessageError("job_id requerido en el mensaje")
-            started = time.time()
-            started_at = datetime.now(timezone.utc)
-            update_job_status(msg.job_id, "processing", None)
-
-            transcript = run(msg)
-            duration_ms = int((time.time() - started) * 1000)
-            finished_at = datetime.now(timezone.utc)
-            # Duración de audio si venía en el mensaje
-            audio_duration = msg.duration_seconds
-
-            update_job_status(msg.job_id, "completed", None)
-            save_job_result(
-                msg.job_id,
-                {"transcript": transcript, "audio_id": msg.audio_id},
-                output_ref="whisper-turbo",
-                duration_ms=duration_ms,
-                started_at=started_at,
-                finished_at=finished_at,
-                audio_duration=audio_duration,
-            )
-
-        except Exception as exc:
-            update_job_status(msg.job_id, "failed", str(exc))
-            raise
-    else:
+    if base.message_type != "audio":
         raise InvalidMessageError(f"Unsupported message_type={base.message_type}")
+
+    msg = AudioMessage.model_validate_json(raw)
+    try:
+        if msg.job_id is None:
+            raise InvalidMessageError("job_id requerido en el mensaje")
+        started = time.time()
+        started_at = datetime.now(timezone.utc)
+        update_job_status(msg.job_id, "processing", None)
+
+        transcript = run(msg)
+        duration_ms = int((time.time() - started) * 1000)
+        finished_at = datetime.now(timezone.utc)
+        # Duración de audio si venía en el mensaje
+        audio_duration = msg.duration_seconds
+
+        update_job_status(msg.job_id, "completed", None)
+        save_job_result(
+            msg.job_id,
+            {"transcript": transcript, "audio_id": msg.audio_id},
+            output_ref="whisper-turbo",
+            duration_ms=duration_ms,
+            started_at=started_at,
+            finished_at=finished_at,
+            audio_duration=audio_duration,
+        )
+        return True
+    except Exception as exc:
+        update_job_status(msg.job_id, "failed", str(exc))
+        logger.exception("Error procesando job_id=%s", msg.job_id)
+        return False
 
 
 def main():
@@ -122,9 +123,9 @@ def main():
     )
 
     for record in consumer:
+        ok = False
         try:
-            process_message(record.value)
-            consumer.commit()
+            ok = process_message(record.value)
         except InvalidMessageError as e:
             logger.exception("Mensaje inválido topic=%s offset=%s", record.topic, record.offset)
 
@@ -138,11 +139,10 @@ def main():
 
             dlq_producer.send(cfg["dlq_topic"], payload).get(timeout=10)
             dlq_producer.flush()
-            consumer.commit()
-        except Exception as exc:
-            logger.exception("Fallo procesando topic=%s offset=%s", record.topic, record.offset)
-            # Salta el offset para evitar bucles; ya se marcó el job como failed
-            consumer.commit()
+            ok = True  # Consideramos procesado al mandarlo a DLQ
+        finally:
+            if ok:
+                consumer.commit()
 
 
 if __name__ == "__main__":
