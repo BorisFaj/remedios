@@ -144,7 +144,7 @@ def send_text_answer(text: str, phone_number: int, message_id: str, number_id: s
     }
     _post_graph(f"{GRAPH_URL}/{number_id}/messages", mark_read_data)
 
-def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None]:
+def extract_audio(message: dict) -> bytes:
     audio_id = message["audio"]["id"]
     # mime_type = message["audio"]["mime_type"]
 
@@ -160,16 +160,15 @@ def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None
         logger.info("audio download status=%s size=%s", audio_response.status_code, len(content))
         if audio_response.status_code == 200:
             audio_file = content
-            duration = None
         else:
             logger.error(f"Error al descargar el archivo: {response_url.status_code}")
             logger.error(response_url.text)
-            return b"", None
+            return b""
     else:
         logger.error("URL no recibida :(")
-        return b"", None
+        return b""
 
-    return audio_file, duration
+    return audio_file
 
 # def send_audio_answer(message: dict, phone_number) -> None:
 #     # Transcribir audio

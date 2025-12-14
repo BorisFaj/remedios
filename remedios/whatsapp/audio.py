@@ -1,6 +1,7 @@
-from remedios.whatsapp.handler import get_message, get_phone_number, send_text_answer, extract_audio
+from typing import Tuple
+
+from remedios.whatsapp.handler import send_text_answer, extract_audio
 from remedios.commons.stt.whisper import transcribe
-from remedios.log.sender import validate_message
 from remedios.commons.schemas import AudioMessage
 import logging
 import sys
@@ -15,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run(msg: AudioMessage) -> str:
+def run(msg: AudioMessage) -> Tuple[str, float]:
     logger.info("Procesando AudioMessage job_id=%s audio_id=%s", msg.job_id, msg.audio_id)
 
     _message_dict = {
@@ -23,13 +24,12 @@ def run(msg: AudioMessage) -> str:
     }
 
     try:
-        audio_bytes, duration = extract_audio(_message_dict, msg.phone)
-        if duration is not None:
-            msg.duration_seconds = duration
-        transcript = transcribe(audio_bytes)
+        audio_bytes = extract_audio(_message_dict)
+        transcript, duration = transcribe(audio_bytes)
     except Exception as exc:
         logger.exception("Fallo transcripción job_id=%s. %s", msg.job_id, exc)
         transcript = ""
+        duration = None
 
     transcript = transcript.strip() if transcript else ""
     final_response = transcript or "No pude entender tu audio."
@@ -38,4 +38,4 @@ def run(msg: AudioMessage) -> str:
     # Enviar respuesta al usuario
     send_text_answer(final_response, msg.phone, msg.message_id, msg.number_id)
     
-    return final_response
+    return final_response, duration

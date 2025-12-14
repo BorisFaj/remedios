@@ -1,5 +1,6 @@
 import os
 import warnings
+from typing import Tuple
 
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
@@ -22,7 +23,8 @@ whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
 processor = AutoProcessor.from_pretrained(whisper_model_id)
 
 
-def transcribe(file_name) -> str:
+def transcribe(file_name) -> Tuple[str, float]:
+    """Devuelve (texto, duracion_s|None) usando los timestamps del pipeline."""
     pipe = pipeline(
         "automatic-speech-recognition",
         model=whisper_model,
@@ -35,4 +37,14 @@ def transcribe(file_name) -> str:
     with torch.inference_mode():
         result = pipe(file_name, return_timestamps=True, generate_kwargs={"language": "spanish"})
 
-    return result["text"]
+    text = result.get("text", "") or ""
+    duration = None
+    chunks = result.get("chunks") or []
+    if chunks and isinstance(chunks, list):
+        last = chunks[-1]
+        if isinstance(last, dict):
+            ts = last.get("timestamp")
+            if isinstance(ts, (list, tuple)) and len(ts) == 2 and ts[1] is not None:
+                duration = float(ts[1])
+
+    return text, duration
