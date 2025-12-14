@@ -23,8 +23,10 @@ def run(msg: AudioMessage) -> str:
     }
 
     try:
-        audio_io = extract_audio(_message_dict, msg.phone)
-        transcript = transcribe(audio_io)
+        audio_bytes, duration = extract_audio(_message_dict, msg.phone)
+        if duration is not None:
+            msg.duration_seconds = duration
+        transcript = transcribe(audio_bytes)
     except Exception as exc:
         logger.exception("Fallo transcripción job_id=%s. %s", msg.job_id, exc)
         transcript = ""
@@ -37,4 +39,3 @@ def run(msg: AudioMessage) -> str:
     send_text_answer(final_response, msg.phone, msg.message_id, msg.number_id)
     
     return final_response
-
