@@ -184,14 +184,14 @@ def extract_audio(message: dict, phone_number: int) -> tuple[bytes, float | None
 
 
 def _probe_duration_bytes(data: bytes):
-    """Devuelve duración en segundos usando ffprobe desde stdin; None si falla."""
+    """Devuelve duración en segundos usando ffprobe desde stdin; None si falla o da 0."""
     try:
         cmd = [
             FFPROBE_BIN,
             "-v",
             "error",
             "-show_entries",
-            "format=duration",
+            "format=duration,stream=duration",
             "-of",
             "json",
             "-i",
@@ -199,8 +199,14 @@ def _probe_duration_bytes(data: bytes):
         ]
         out = subprocess.check_output(cmd, input=data, stderr=subprocess.STDOUT)
         data = jsonlib.loads(out.decode("utf-8", "ignore"))
-        dur = float(data.get("format", {}).get("duration", 0.0))
-        return dur
+        fmt_dur = float(data.get("format", {}).get("duration", 0.0) or 0.0)
+        stream_durs = [
+            float(s.get("duration", 0.0) or 0.0)
+            for s in data.get("streams", [])
+            if isinstance(s, dict)
+        ]
+        dur = max([fmt_dur] + stream_durs) if stream_durs else fmt_dur
+        return dur if dur > 0 else None
     except Exception as exc:
         logger.error("ffprobe failed to get duration: %s", exc)
         return None
