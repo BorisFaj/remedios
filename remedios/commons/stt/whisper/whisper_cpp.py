@@ -1,7 +1,7 @@
 import logging
 import os
 import tempfile
-from typing import Union
+from typing import Union, Tuple
 
 import ffmpeg
 import requests
@@ -90,7 +90,7 @@ def _transcribe_via_server(wav_bytes: bytes, url: str | None = None) -> str:
         raise RuntimeError("Error al transcribir con whisper-server") from exc
 
 
-def transcribe(audio: Union[str, bytes, bytearray]) -> str:
+def transcribe(audio: Union[str, bytes, bytearray]) -> Tuple[str, float]:
     if WHISPER_FAKE:
         return "transcription-disabled"
 
@@ -98,4 +98,4 @@ def transcribe(audio: Union[str, bytes, bytearray]) -> str:
         raise RuntimeError("WHISPER_SERVER_URL no está definido; whisper-server es obligatorio")
 
     wav_bytes = _to_wav_file(audio)
-    return _transcribe_via_server(wav_bytes)
+    return _transcribe_via_server(wav_bytes), 0.0
