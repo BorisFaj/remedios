@@ -56,8 +56,18 @@ spec:
             cpu: "500m"
             memory: "2Gi"
           limits:
-            cpu: "2000m"
+            cpu: "1"
             memory: "6Gi"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - whisper-cpp
+            topologyKey: "kubernetes.io/hostname"
       nodeSelector:
         kubernetes.io/arch: arm64
       volumes:
