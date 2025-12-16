@@ -58,6 +58,16 @@ def _check_internal_auth():
     return auth == f"Bearer {INTERNAL_API_TOKEN}"
 
 
+@app.before_request
+def _protect_internal_paths():
+    path = request.path or ""
+    if path.startswith("/internal/"):
+        if not INTERNAL_API_TOKEN:
+            return abort(403)
+        if not _check_internal_auth():
+            return abort(401)
+
+
 def verificar_webhook():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
