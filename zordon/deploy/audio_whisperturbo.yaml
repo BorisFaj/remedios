@@ -42,8 +42,6 @@ spec:
             name: whisper-turbo-config
         - secretRef:
             name: remedios-secrets
-        - secretRef:
-            name: internal-api-token
         ports:
         - containerPort: 8001
         volumeMounts:
