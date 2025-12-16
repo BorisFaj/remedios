@@ -6,6 +6,7 @@ metadata:
 data:
   WHISPER_MODEL: "/app/ggml-large-v3-turbo-q5_0.bin"
   WHISPER_MODEL_REPO: "ggerganov/whisper.cpp"
+  INTERNAL_API_URL: "http://remedios"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -37,8 +38,6 @@ spec:
           value: "1"
         - name: WHISPER_BACKEND
           value: "cpp"
-        - name: ORACLE_WALLET_PATH
-          value: /opt/oracle/wallet
         envFrom:
         - configMapRef:
             name: remedios-config
@@ -46,13 +45,11 @@ spec:
             name: whisper-cpp-config
         - secretRef:
             name: remedios-secrets
+        - secretRef:
+            name: internal-api-token
         ports:
         - containerPort: 8001
         - containerPort: 9000
-        volumeMounts:
-        - name: oracle-wallet
-          mountPath: /opt/oracle/wallet
-          readOnly: true
         resources:
           requests:
             cpu: "500m"
@@ -72,10 +69,6 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       nodeSelector:
         kubernetes.io/arch: arm64
-      volumes:
-      - name: oracle-wallet
-        secret:
-          secretName: oracle-wallet
 ---
 apiVersion: v1
 kind: Service
