@@ -19,8 +19,15 @@ import (
 	"time"
 
 	whisper "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
+	"github.com/remedios/core/routing"
 	"github.com/segmentio/kafka-go"
 )
+
+type internalClient struct {
+	baseURL string
+	token   string
+	client  *http.Client
+}
 
 var ffmpegArgs = []string{
 	"-hide_banner", "-loglevel", "error",
@@ -50,16 +57,47 @@ type AudioMessage struct {
 }
 
 type Config struct {
-	Bootstrap  string
-	AudioTopic string
-	DLQTopic   string
-	GroupID    string
-	GraphURL   string
-	GraphToken string
-	FfmpegPath string
-	ModelPath  string
-	Language   string
-	Threads    int
+	Bootstrap        string
+	AudioTopic       string
+	DLQTopic         string
+	GroupID          string
+	GraphURL         string
+	GraphToken       string
+	FfmpegPath       string
+	ModelPath        string
+	Language         string
+	Threads          int
+	InternalAPIURL   string
+	InternalAPIToken string
+}
+
+type dlqProducer struct {
+	writer *kafka.Writer
+}
+
+func newDLQProducer(cfg Config) *dlqProducer {
+	return &dlqProducer{
+		writer: &kafka.Writer{
+			Addr:                   kafka.TCP(cfg.Bootstrap),
+			Topic:                  cfg.DLQTopic,
+			AllowAutoTopicCreation: true,
+			BatchTimeout:           time.Second,
+		},
+	}
+}
+
+func (p *dlqProducer) Close() {
+	if p == nil || p.writer == nil {
+		return
+	}
+	_ = p.writer.Close()
+}
+
+func (p *dlqProducer) Send(ctx context.Context, m kafka.Message) error {
+	if p == nil || p.writer == nil {
+		return errors.New("dlq producer not initialized")
+	}
+	return p.writer.WriteMessages(ctx, m)
 }
 
 func mustEnv(key, fallback string, required bool) string {
@@ -73,6 +111,38 @@ func mustEnv(key, fallback string, required bool) string {
 	return val
 }
 
+func newInternalClient(cfg Config) *internalClient {
+	return &internalClient{
+		baseURL: strings.TrimSuffix(cfg.InternalAPIURL, "/"),
+		token:   cfg.InternalAPIToken,
+		client:  &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+func (c *internalClient) post(ctx context.Context, path string, payload any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("internal api %s failed: status=%d body=%s", path, resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
 func loadConfig() Config {
 	threads := runtime.NumCPU()
 	if v := os.Getenv("WHISPER_THREADS"); v != "" {
@@ -81,16 +151,18 @@ func loadConfig() Config {
 		}
 	}
 	return Config{
-		Bootstrap:  mustEnv("BOOTSTRAP_SERVER", "", true),
-		AudioTopic: mustEnv("AUDIO_TOPIC", "transcription_requests", false),
-		DLQTopic:   mustEnv("DLQ_TOPIC", "remedios_dlq", false),
-		GroupID:    mustEnv("GROUP_ID", "whatsapp-audio-consumer", false),
-		GraphURL:   mustEnv("GRAPH_URL", "", true),
-		GraphToken: mustEnv("GRAPH_API_TOKEN", "", true),
-		FfmpegPath: mustEnv("FFMPEG_PATH", "ffmpeg", false),
-		ModelPath:  mustEnv("WHISPER_MODEL", "/app/ggml-large-v3-turbo-q5_0.bin", false),
-		Language:   os.Getenv("WHISPER_LANGUAGE"),
-		Threads:    threads,
+		Bootstrap:        mustEnv("BOOTSTRAP_SERVER", "", true),
+		AudioTopic:       mustEnv("AUDIO_TOPIC", "transcription_requests", false),
+		DLQTopic:         mustEnv("DLQ_TOPIC", "incoming.messages.text.dlq", false),
+		GroupID:          mustEnv("GROUP_ID", "whatsapp-audio-consumer", false),
+		GraphURL:         mustEnv("GRAPH_URL", "", true),
+		GraphToken:       mustEnv("GRAPH_API_TOKEN", "", true),
+		FfmpegPath:       mustEnv("FFMPEG_PATH", "ffmpeg", false),
+		ModelPath:        mustEnv("WHISPER_MODEL", "/app/ggml-large-v3-turbo-q5_0.bin", false),
+		Language:         os.Getenv("WHISPER_LANGUAGE"),
+		Threads:          threads,
+		InternalAPIURL:   mustEnv("INTERNAL_API_URL", "", true),
+		InternalAPIToken: mustEnv("INTERNAL_API_TOKEN", "", true),
 	}
 }
 
@@ -308,7 +380,7 @@ func sendTextAnswer(ctx context.Context, cfg Config, msg AudioMessage, text stri
 	return nil
 }
 
-func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []byte) error {
+func handleMessage(ctx context.Context, cfg Config, internal *internalClient, mdl whisper.Model, value []byte) error {
 	var base IncomingMessage
 	if err := json.Unmarshal(value, &base); err != nil {
 		return fmt.Errorf("invalid json: %w", err)
@@ -322,6 +394,13 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 	}
 
 	log.Printf("msg in job_id=%d audio_id=%s partition?=n/a", msg.JobID, msg.AudioID)
+	startedAt := time.Now().UTC()
+	if err := internal.post(ctx, "/internal/job_status", map[string]any{
+		"job_id": msg.JobID,
+		"status": "processing",
+	}); err != nil {
+		return fmt.Errorf("job_status processing: %w", err)
+	}
 
 	audioCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -340,6 +419,27 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 	if err != nil {
 		return err
 	}
+	finishedAt := time.Now().UTC()
+	durationMs := finishedAt.Sub(startedAt).Milliseconds()
+
+	if err := internal.post(ctx, "/internal/job_result", map[string]any{
+		"job_id":                 msg.JobID,
+		"result":                 map[string]any{"transcript": text, "audio_id": msg.AudioID},
+		"output_ref":             "whisper-cpp",
+		"duration_ms":            durationMs,
+		"started_at":             startedAt.Format(time.RFC3339),
+		"finished_at":            finishedAt.Format(time.RFC3339),
+		"audio_duration_seconds": duration,
+	}); err != nil {
+		return fmt.Errorf("job_result: %w", err)
+	}
+
+	if err := internal.post(ctx, "/internal/job_status", map[string]any{
+		"job_id": msg.JobID,
+		"status": "completed",
+	}); err != nil {
+		return fmt.Errorf("job_status completed: %w", err)
+	}
 	if err := sendTextAnswer(audioCtx, cfg, msg, text); err != nil {
 		return fmt.Errorf("send_text: %w", err)
 	}
@@ -350,6 +450,10 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 
 func main() {
 	cfg := loadConfig()
+	internal := newInternalClient(cfg)
+	dlq := newDLQProducer(cfg)
+	defer dlq.Close()
+
 	model, err := whisper.New(cfg.ModelPath)
 	if err != nil {
 		log.Fatalf("failed to load model: %v", err)
@@ -374,8 +478,23 @@ func main() {
 			continue
 		}
 		log.Printf("received message topic=%s partition=%d offset=%d", m.Topic, m.Partition, m.Offset)
-		if err := handleMessage(context.Background(), cfg, model, m.Value); err != nil {
+		if err := handleMessage(context.Background(), cfg, internal, model, m.Value); err != nil {
 			log.Printf("process error topic=%s partition=%d offset=%d: %v", m.Topic, m.Partition, m.Offset, err)
+			payload, _ := json.Marshal(map[string]any{
+				"error":     err.Error(),
+				"raw":       string(m.Value),
+				"topic":     m.Topic,
+				"partition": m.Partition,
+				"offset":    m.Offset,
+			})
+			if dlq != nil {
+				if dlqErr := dlq.Send(context.Background(), kafka.Message{Value: payload}); dlqErr != nil {
+					log.Printf("dlq send failed: %v", dlqErr)
+				}
+			}
+			if err := reader.CommitMessages(context.Background(), m); err != nil {
+				log.Printf("commit error after dlq topic=%s partition=%d offset=%d: %v", m.Topic, m.Partition, m.Offset, err)
+			}
 			continue
 		}
 		if err := reader.CommitMessages(context.Background(), m); err != nil {
