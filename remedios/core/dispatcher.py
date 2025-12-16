@@ -54,8 +54,6 @@ def on_error(e):
 
 
 def _check_internal_auth():
-    if not INTERNAL_API_TOKEN:
-        return True
     auth = request.headers.get("Authorization", "")
     return auth == f"Bearer {INTERNAL_API_TOKEN}"
 
