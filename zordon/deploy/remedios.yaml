@@ -99,7 +99,14 @@ spec:
     - host: ${DOMAIN}
       http:
         paths:
-          - path: /
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: remedios
+                port:
+                  number: 80
+          - path: /webhook
             pathType: Prefix
             backend:
               service:
