@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 import socket
 from kafka import KafkaProducer
 import json
@@ -9,7 +9,13 @@ import atexit
 from datetime import datetime, timezone
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id, get_audio_metadata
-from remedios.log.sender import validate_user, validate_message, create_job
+from remedios.log.sender import (
+    validate_user,
+    validate_message,
+    create_job,
+    update_job_status,
+    save_job_result,
+)
 from remedios.core.routing import route
 from itertools import count
 
@@ -36,6 +42,7 @@ hostname = str.encode(socket.gethostname())
 
 # Flask
 app = Flask(__name__)
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
 
 
 def on_success(metadata):
@@ -44,6 +51,13 @@ def on_success(metadata):
 
 def on_error(e):
   app.logger.info(f"❌ Error enviando mensaje a Kafka: {e}")
+
+
+def _check_internal_auth():
+    if not INTERNAL_API_TOKEN:
+        return True
+    auth = request.headers.get("Authorization", "")
+    return auth == f"Bearer {INTERNAL_API_TOKEN}"
 
 
 def verificar_webhook():
@@ -202,6 +216,61 @@ def webhook():
 
 @app.route("/health", methods=["GET"])
 def health():
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/internal/job_status", methods=["POST"])
+def internal_job_status():
+    if not _check_internal_auth():
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    job_id = payload.get("job_id")
+    status = payload.get("status")
+    error_message = payload.get("error_message")
+    if not job_id or not status:
+        return jsonify({"error": "job_id and status are required"}), 400
+    ok = update_job_status(job_id, status, error_message)
+    if not ok:
+        return jsonify({"error": "failed to update status"}), 500
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/internal/job_result", methods=["POST"])
+def internal_job_result():
+    if not _check_internal_auth():
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    job_id = payload.get("job_id")
+    result = payload.get("result")
+    output_ref = payload.get("output_ref")
+    duration_ms = payload.get("duration_ms")
+    started_at = payload.get("started_at")
+    finished_at = payload.get("finished_at")
+    audio_duration_seconds = payload.get("audio_duration_seconds")
+
+    if not job_id or result is None:
+        return jsonify({"error": "job_id and result are required"}), 400
+
+    # Parse timestamps in ISO format if provided.
+    def parse_dt(val):
+        if not val:
+            return None
+        try:
+            return datetime.fromisoformat(val.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    ok = save_job_result(
+        job_id,
+        result,
+        output_ref=output_ref,
+        duration_ms=duration_ms,
+        started_at=parse_dt(started_at),
+        finished_at=parse_dt(finished_at),
+        audio_duration_seconds=audio_duration_seconds,
+    )
+    if not ok:
+        return jsonify({"error": "failed to save job_result"}), 500
     return jsonify({"status": "ok"}), 200
 
 
