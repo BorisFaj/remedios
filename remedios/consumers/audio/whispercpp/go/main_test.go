@@ -2,12 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"math"
+	"os/exec"
 	"testing"
 )
 
 // Test only the PCM decode path with an embedded 16kHz mono WAV.
 func TestDecodeWavToPCM(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not available, skipping")
+	}
+
 	// Minimal WAV header for 16-bit PCM, 16kHz mono, data size filled below.
 	header := []byte{
 		'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E',
@@ -36,7 +42,8 @@ func TestDecodeWavToPCM(t *testing.T) {
 	header[40], header[41], header[42], header[43] = byte(dataSize), byte(dataSize>>8), byte(dataSize>>16), byte(dataSize>>24)
 
 	wavBytes := append(header, data...)
-	pcmOut, dur, err := decodeWavToPCM(wavBytes)
+	cfg := Config{FfmpegPath: "ffmpeg"}
+	pcmOut, dur, err := convertToPCM(context.Background(), cfg, wavBytes)
 	if err != nil {
 		t.Fatalf("decodeWavToPCM failed: %v", err)
 	}
