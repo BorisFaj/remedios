@@ -1,61 +1,70 @@
-FROM python:3.10-slim
+FROM debian:bookworm-slim AS builder
 
 ARG APP_SRC=remedios
-ENV VENV=/app/remedios/.venv
-ENV PYTHONPATH=/app
-
-# Dependencias base y ffmpeg para manejar audio
+ARG GO_VERSION=1.23.2
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ca-certificates \
+    curl \
+    git \
     build-essential \
     cmake \
-    git \
+    pkg-config \
+    ffmpeg \
     libopenblas-dev \
     libgomp1 \
-    netcat-openbsd \
-    pkg-config \
-    python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
+
+# Go toolchain
+RUN curl -fsSL https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz -o /tmp/go.tgz \
+ && tar -C /usr/local -xzf /tmp/go.tgz \
+ && rm /tmp/go.tgz
+ENV PATH="/usr/local/go/bin:${PATH}"
 
 WORKDIR /app
 
-# Copiar requirements primero para cache (APP_SRC=remedios si el contexto es raíz)
-COPY ${APP_SRC}/requirements.txt ./remedios/
-COPY ${APP_SRC}/consumers/audio/whispercpp/requirements.txt ./remedios/requirements_audio.txt
-
-# Crear venv e instalar dependencias en modo CPU
-RUN python3 -m venv $VENV \
-    && $VENV/bin/pip install --upgrade pip setuptools \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt
-
-# Construir binario CLI y server de whisper.cpp (CPU) en tag estable
+# --- build whisper.cpp (shared lib) ---
 RUN git clone --depth 1 --branch v1.8.2 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
-    && cd /tmp/whisper.cpp \
-    && cmake -B build \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DGGML_NATIVE=OFF \
-        -DWHISPER_BUILD_SERVER=ON \
-        -DWHISPER_BUILD_EXAMPLES=ON \
-        -DGGML_OPENMP=ON \
-        -DGGML_BLAS=ON \
-        -DGGML_BLAS_VENDOR=OpenBLAS \
-    && cmake --build build -j \
-    && WHISPER_CLI_BIN=$(find /tmp/whisper.cpp/build/bin -maxdepth 1 -type f \( -name 'whisper-cli' -o -name 'whisper' -o -name 'main' \) | head -n1) \
-    && if [ -z "$WHISPER_CLI_BIN" ]; then echo 'whisper cli no encontrado' >&2; exit 1; fi \
-    && cp "$WHISPER_CLI_BIN" /usr/local/bin/whispercpp-cli \
-    && WHISPER_SERVER_BIN=$(find /tmp/whisper.cpp/build/bin -maxdepth 1 -type f \( -name 'whisper-server' -o -name 'server' \) | head -n1) \
-    && if [ -z "$WHISPER_SERVER_BIN" ]; then echo 'whisper-server no encontrado' >&2; exit 1; fi \
-    && cp "$WHISPER_SERVER_BIN" /usr/local/bin/whisper-server \
-    && find /tmp/whisper.cpp/build -type f -name 'lib*.so*' -exec cp {} /usr/local/lib/ \; \
-    && ldconfig \
-    && rm -rf /tmp/whisper.cpp
+ && cd /tmp/whisper.cpp \
+ && cmake -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DGGML_NATIVE=OFF \
+      -DWHISPER_BUILD_SHARED_LIB=ON \
+      -DWHISPER_BUILD_SERVER=OFF \
+      -DWHISPER_BUILD_EXAMPLES=ON \
+      -DGGML_OPENMP=ON \
+      -DGGML_BLAS=ON \
+      -DGGML_BLAS_VENDOR=OpenBLAS \
+ && cmake --build build -j \
+ && cmake --install build --prefix /usr/local \
+ && ldconfig
 
-# Copiar código de la app conservando la ruta del paquete
-COPY ${APP_SRC}/ /app/remedios
-WORKDIR /app
-ENV PATH="/app/remedios/.venv/bin:${PATH}"
+# --- build Go consumer ---
+COPY ${APP_SRC}/consumers/audio/whispercpp/go/ /app/whispercpp/
+WORKDIR /app/whispercpp
+RUN go mod tidy && go build -o /usr/local/bin/whispercpp-consumer .
+
+# Final image
+FROM debian:bookworm-slim
+ARG APP_SRC=remedios
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    ffmpeg \
+    netcat-openbsd \
+    libgomp1 \
+    libopenblas0-openmp \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/whispercpp-consumer /usr/local/bin/whispercpp-consumer
+COPY --from=builder /usr/local/lib/ /usr/local/lib/
+COPY --from=builder /usr/local/include/ /usr/local/include/
+COPY ${APP_SRC}/consumers/audio/whispercpp/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
 
-# Arranque del consumer (levanta whisper-server interno)
-ENTRYPOINT ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.audio.whispercpp.consumer"]
+WORKDIR /app
+
+# Arranca whisper-server y luego el consumer Go
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
