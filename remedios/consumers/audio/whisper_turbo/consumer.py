@@ -62,7 +62,9 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
         group_id=cfg["group_id"],
         enable_auto_commit=False,
         auto_offset_reset="latest",
-        value_deserializer=None
+        value_deserializer=None,
+        max_poll_interval_ms=600000,
+        max_poll_records=1,
     )
 
 
