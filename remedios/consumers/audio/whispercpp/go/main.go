@@ -50,18 +50,16 @@ type AudioMessage struct {
 }
 
 type Config struct {
-	Bootstrap        string
-	AudioTopic       string
-	DLQTopic         string
-	GroupID          string
-	GraphURL         string
-	GraphToken       string
-	FfmpegPath       string
-	ModelPath        string
-	Language         string
-	Threads          int
-	InternalAPIURL   string
-	InternalAPIToken string
+	Bootstrap  string
+	AudioTopic string
+	DLQTopic   string
+	GroupID    string
+	GraphURL   string
+	GraphToken string
+	FfmpegPath string
+	ModelPath  string
+	Language   string
+	Threads    int
 }
 
 func mustEnv(key, fallback string, required bool) string {
@@ -75,44 +73,6 @@ func mustEnv(key, fallback string, required bool) string {
 	return val
 }
 
-type internalClient struct {
-	baseURL string
-	token   string
-	client  *http.Client
-}
-
-func newInternalClient(cfg Config) *internalClient {
-	return &internalClient{
-		baseURL: strings.TrimSuffix(cfg.InternalAPIURL, "/"),
-		token:   cfg.InternalAPIToken,
-		client:  &http.Client{Timeout: 10 * time.Second},
-	}
-}
-
-func (c *internalClient) post(ctx context.Context, path string, payload any) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("internal api %s failed: status=%d body=%s", path, resp.StatusCode, string(respBody))
-	}
-	return nil
-}
-
 func loadConfig() Config {
 	threads := runtime.NumCPU()
 	if v := os.Getenv("WHISPER_THREADS"); v != "" {
@@ -121,18 +81,16 @@ func loadConfig() Config {
 		}
 	}
 	return Config{
-		Bootstrap:        mustEnv("BOOTSTRAP_SERVER", "", true),
-		AudioTopic:       mustEnv("AUDIO_TOPIC", "transcription_requests", false),
-		DLQTopic:         mustEnv("DLQ_TOPIC", "remedios_dlq", false),
-		GroupID:          mustEnv("GROUP_ID", "whatsapp-audio-consumer", false),
-		GraphURL:         mustEnv("GRAPH_URL", "", true),
-		GraphToken:       mustEnv("GRAPH_API_TOKEN", "", true),
-		FfmpegPath:       mustEnv("FFMPEG_PATH", "ffmpeg", false),
-		ModelPath:        mustEnv("WHISPER_MODEL", "/app/ggml-large-v3-turbo-q5_0.bin", false),
-		Language:         os.Getenv("WHISPER_LANGUAGE"),
-		Threads:          threads,
-		InternalAPIURL:   mustEnv("INTERNAL_API_URL", "", true),
-		InternalAPIToken: mustEnv("INTERNAL_API_TOKEN", "", true),
+		Bootstrap:  mustEnv("BOOTSTRAP_SERVER", "", true),
+		AudioTopic: mustEnv("AUDIO_TOPIC", "transcription_requests", false),
+		DLQTopic:   mustEnv("DLQ_TOPIC", "remedios_dlq", false),
+		GroupID:    mustEnv("GROUP_ID", "whatsapp-audio-consumer", false),
+		GraphURL:   mustEnv("GRAPH_URL", "", true),
+		GraphToken: mustEnv("GRAPH_API_TOKEN", "", true),
+		FfmpegPath: mustEnv("FFMPEG_PATH", "ffmpeg", false),
+		ModelPath:  mustEnv("WHISPER_MODEL", "/app/ggml-large-v3-turbo-q5_0.bin", false),
+		Language:   os.Getenv("WHISPER_LANGUAGE"),
+		Threads:    threads,
 	}
 }
 
@@ -364,14 +322,6 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 	}
 
 	log.Printf("msg in job_id=%d audio_id=%s partition?=n/a", msg.JobID, msg.AudioID)
-	internal := newInternalClient(cfg)
-	startedAt := time.Now().UTC()
-	if err := internal.post(ctx, "/internal/job_status", map[string]any{
-		"job_id": msg.JobID,
-		"status": "processing",
-	}); err != nil {
-		log.Printf("warn: job_status processing failed job_id=%d err=%v", msg.JobID, err)
-	}
 
 	audioCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -389,27 +339,6 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 	text, err := transcribe(audioCtx, cfg, mdl, pcm)
 	if err != nil {
 		return err
-	}
-	finishedAt := time.Now().UTC()
-	durationMs := finishedAt.Sub(startedAt).Milliseconds()
-
-	if err := internal.post(ctx, "/internal/job_result", map[string]any{
-		"job_id":                 msg.JobID,
-		"result":                 map[string]any{"transcript": text, "audio_id": msg.AudioID},
-		"output_ref":             "whisper-cpp",
-		"duration_ms":            durationMs,
-		"started_at":             startedAt.Format(time.RFC3339),
-		"finished_at":            finishedAt.Format(time.RFC3339),
-		"audio_duration_seconds": duration,
-	}); err != nil {
-		log.Printf("warn: job_result failed job_id=%d err=%v", msg.JobID, err)
-	}
-
-	if err := internal.post(ctx, "/internal/job_status", map[string]any{
-		"job_id": msg.JobID,
-		"status": "completed",
-	}); err != nil {
-		log.Printf("warn: job_status completed failed job_id=%d err=%v", msg.JobID, err)
 	}
 	if err := sendTextAnswer(audioCtx, cfg, msg, text); err != nil {
 		return fmt.Errorf("send_text: %w", err)

@@ -96,36 +96,27 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
         started = time.time()
         started_at = datetime.now(timezone.utc)
-        try:
-            _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "processing"})
-        except Exception as exc:
-            logger.warning("No se pudo marcar processing job_id=%s: %s", msg.job_id, exc)
+        _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "processing"})
 
         transcript, duration = run(msg)
         duration_ms = int((time.time() - started) * 1000)
         finished_at = datetime.now(timezone.utc)
         # Duración de audio si venía en el mensaje
 
-        try:
-            _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "completed"})
-        except Exception as exc:
-            logger.warning("No se pudo marcar completed job_id=%s: %s", msg.job_id, exc)
-        try:
-            _post(
-                cfg,
-                "/internal/job_result",
-                {
-                    "job_id": msg.job_id,
-                    "result": {"transcript": transcript, "audio_id": msg.audio_id},
-                    "output_ref": "whisper-turbo",
-                    "duration_ms": duration_ms,
-                    "started_at": started_at.isoformat(),
-                    "finished_at": finished_at.isoformat(),
-                    "audio_duration_seconds": duration,
-                },
-            )
-        except Exception as exc:
-            logger.warning("No se pudo guardar job_result job_id=%s: %s", msg.job_id, exc)
+        _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "completed"})
+        _post(
+            cfg,
+            "/internal/job_result",
+            {
+                "job_id": msg.job_id,
+                "result": {"transcript": transcript, "audio_id": msg.audio_id},
+                "output_ref": "whisper-turbo",
+                "duration_ms": duration_ms,
+                "started_at": started_at.isoformat(),
+                "finished_at": finished_at.isoformat(),
+                "audio_duration_seconds": duration,
+            },
+        )
         return True
     except Exception as exc:
         try:
