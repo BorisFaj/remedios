@@ -3,22 +3,34 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/segmentio/kafka-go"
 	whisper "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
-	wav "github.com/go-audio/wav"
+	"github.com/segmentio/kafka-go"
 )
+
+var ffmpegArgs = []string{
+	"-hide_banner", "-loglevel", "error",
+	"-i", "pipe:0",
+	"-ac", "1",
+	"-ar", fmt.Sprint(whisper.SampleRate),
+	"-acodec", "pcm_f32le",
+	"-f", "f32le",
+	"pipe:1",
+}
 
 type IncomingMessage struct {
 	SchemaVersion int       `json:"schema_version"`
@@ -82,49 +94,39 @@ func loadConfig() Config {
 	}
 }
 
-func convertToWav(ctx context.Context, cfg Config, audio []byte) ([]byte, error) {
+func convertToPCM(ctx context.Context, cfg Config, audio []byte) ([]float32, float64, error) {
 	if len(audio) == 0 {
-		return nil, errors.New("empty audio payload")
+		return nil, 0, errors.New("empty audio payload")
 	}
-	cmd := exec.CommandContext(ctx, cfg.FfmpegPath,
-		"-i", "pipe:0",
-		"-ac", "1",
-		"-ar", fmt.Sprint(whisper.SampleRate),
-		"-f", "wav",
-		"pipe:1",
-	)
+
+	args := append([]string{cfg.FfmpegPath}, ffmpegArgs...)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	cmd.Stdin = bytes.NewReader(audio)
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("ffmpeg failed: %w (%s)", err, stderr.String())
-	}
-	wav := stdout.Bytes()
-	if len(wav) == 0 {
-		return nil, fmt.Errorf("ffmpeg produced empty wav (stderr=%s)", stderr.String())
-	}
-	return wav, nil
-}
 
-func decodeWavToPCM(wavBytes []byte) ([]float32, float64, error) {
-	dec := wav.NewDecoder(bytes.NewReader(wavBytes))
-	buf, err := dec.FullPCMBuffer()
-	if err != nil {
-		return nil, 0, err
+	if err := cmd.Run(); err != nil {
+		return nil, 0, fmt.Errorf("ffmpeg failed: %w (%s)", err, stderr.String())
 	}
-	if dec.SampleRate != whisper.SampleRate {
-		return nil, 0, fmt.Errorf("unsupported sample rate: %d", dec.SampleRate)
+
+	raw := stdout.Bytes()
+	if len(raw) == 0 {
+		return nil, 0, fmt.Errorf("ffmpeg produced empty pcm (stderr=%s)", stderr.String())
 	}
-	if dec.NumChans != 1 {
-		return nil, 0, fmt.Errorf("unsupported channels: %d", dec.NumChans)
+	if len(raw)%4 != 0 {
+		return nil, 0, fmt.Errorf("pcm output not aligned: %d bytes", len(raw))
 	}
-	data := buf.AsFloat32Buffer().Data
-	if len(data) == 0 {
-		return nil, 0, errors.New("empty PCM data after decode")
+
+	samples := make([]float32, len(raw)/4)
+	for i := 0; i < len(samples); i++ {
+		bits := binary.LittleEndian.Uint32(raw[i*4:])
+		samples[i] = math.Float32frombits(bits)
 	}
-	duration := float64(len(data)) / float64(dec.SampleRate)
-	return data, duration, nil
+	duration := float64(len(samples)) / float64(whisper.SampleRate)
+
+	return samples, duration, nil
 }
 
 func fetchAudio(ctx context.Context, cfg Config, audioID string) ([]byte, error) {
@@ -167,7 +169,14 @@ func fetchAudio(ctx context.Context, cfg Config, audioID string) ([]byte, error)
 		body, _ := io.ReadAll(resp2.Body)
 		return nil, fmt.Errorf("audio download failed: %s", string(body))
 	}
-	return io.ReadAll(resp2.Body)
+	body, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) == 0 {
+		return nil, errors.New("downloaded empty audio payload")
+	}
+	return body, nil
 }
 
 func transcribe(ctx context.Context, cfg Config, mdl whisper.Model, pcm []float32) (string, error) {
@@ -209,6 +218,96 @@ func transcribe(ctx context.Context, cfg Config, mdl whisper.Model, pcm []float3
 	return text.String(), nil
 }
 
+func sendTextAnswer(ctx context.Context, cfg Config, msg AudioMessage, text string) error {
+	if cfg.GraphURL == "" || cfg.GraphToken == "" {
+		return errors.New("GRAPH_URL/GRAPH_API_TOKEN missing")
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	url := strings.TrimSuffix(cfg.GraphURL, "/") + "/" + msg.NumberID + "/messages"
+
+	makeReq := func(body []byte) (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+cfg.GraphToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		return req, nil
+	}
+
+	payload := map[string]any{
+		"messaging_product": "whatsapp",
+		"to":                fmt.Sprint(msg.Phone),
+		"text":              map[string]string{"body": text},
+		"context":           map[string]string{"message_id": msg.MessageID},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		if attempt > 1 {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+		req, err := makeReq(body)
+		if err != nil {
+			return err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			log.Printf("send_text attempt=%d failed: %v", attempt, err)
+			continue
+		}
+		func() {
+			defer resp.Body.Close()
+			if resp.StatusCode/100 != 2 {
+				respBody, _ := io.ReadAll(resp.Body)
+				lastErr = fmt.Errorf("send_text failed: status=%d body=%s", resp.StatusCode, string(respBody))
+				log.Printf("send_text attempt=%d non-2xx: %v", attempt, lastErr)
+				return
+			}
+			lastErr = nil
+		}()
+		if lastErr == nil {
+			break
+		}
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+
+	// Mark as read (best-effort)
+	markPayload := map[string]any{
+		"messaging_product": "whatsapp",
+		"status":            "read",
+		"message_id":        msg.MessageID,
+	}
+	markBody, err := json.Marshal(markPayload)
+	if err != nil {
+		log.Printf("mark_read marshal failed: %v", err)
+		return nil
+	}
+	reqMark, err := makeReq(markBody)
+	if err != nil {
+		log.Printf("mark_read request build failed: %v", err)
+		return nil
+	}
+	if resp, err := client.Do(reqMark); err != nil {
+		log.Printf("mark_read failed: %v", err)
+	} else {
+		defer resp.Body.Close()
+		if resp.StatusCode/100 != 2 {
+			body, _ := io.ReadAll(resp.Body)
+			log.Printf("mark_read non-2xx status=%d body=%s", resp.StatusCode, string(body))
+		}
+	}
+	return nil
+}
+
 func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []byte) error {
 	var base IncomingMessage
 	if err := json.Unmarshal(value, &base); err != nil {
@@ -222,6 +321,8 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 		return fmt.Errorf("invalid audio payload: %w", err)
 	}
 
+	log.Printf("msg in job_id=%d audio_id=%s partition?=n/a", msg.JobID, msg.AudioID)
+
 	audioCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
@@ -229,20 +330,21 @@ func handleMessage(ctx context.Context, cfg Config, mdl whisper.Model, value []b
 	if err != nil {
 		return err
 	}
-	wavBytes, err := convertToWav(audioCtx, cfg, audioBytes)
+	log.Printf("downloaded audio job_id=%d bytes=%d", msg.JobID, len(audioBytes))
+	pcm, duration, err := convertToPCM(audioCtx, cfg, audioBytes)
 	if err != nil {
 		return err
 	}
-	pcm, duration, err := decodeWavToPCM(wavBytes)
-	if err != nil {
-		return err
-	}
+	log.Printf("transcribing job_id=%d duration=%.2fs", msg.JobID, duration)
 	text, err := transcribe(audioCtx, cfg, mdl, pcm)
 	if err != nil {
 		return err
 	}
+	if err := sendTextAnswer(audioCtx, cfg, msg, text); err != nil {
+		return fmt.Errorf("send_text: %w", err)
+	}
+
 	log.Printf("job_id=%d ok text=%q duration=%.2fs", msg.JobID, text, duration)
-	// TODO: update_job_status + save_job_result via DB/HTTP
 	return nil
 }
 
@@ -255,24 +357,29 @@ func main() {
 	defer model.Close()
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{cfg.Bootstrap},
-		Topic:   cfg.AudioTopic,
-		GroupID: cfg.GroupID,
+		Brokers:        []string{cfg.Bootstrap},
+		Topic:          cfg.AudioTopic,
+		GroupID:        cfg.GroupID,
+		CommitInterval: 0, // manual commit after successful processing
 	})
 	defer reader.Close()
 
 	log.Printf("consuming topic=%s group_id=%s", cfg.AudioTopic, cfg.GroupID)
 
 	for {
-		m, err := reader.ReadMessage(context.Background())
+		m, err := reader.FetchMessage(context.Background())
 		if err != nil {
 			log.Printf("read error: %v", err)
 			time.Sleep(time.Second)
 			continue
 		}
+		log.Printf("received message topic=%s partition=%d offset=%d", m.Topic, m.Partition, m.Offset)
 		if err := handleMessage(context.Background(), cfg, model, m.Value); err != nil {
 			log.Printf("process error topic=%s partition=%d offset=%d: %v", m.Topic, m.Partition, m.Offset, err)
 			continue
+		}
+		if err := reader.CommitMessages(context.Background(), m); err != nil {
+			log.Printf("commit error topic=%s partition=%d offset=%d: %v", m.Topic, m.Partition, m.Offset, err)
 		}
 	}
 }

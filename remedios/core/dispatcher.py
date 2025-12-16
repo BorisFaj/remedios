@@ -6,12 +6,12 @@ import sys
 import logging
 import os
 import atexit
-import uuid
 from datetime import datetime, timezone
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id, get_audio_metadata
 from remedios.log.sender import validate_user, validate_message, create_job
 from remedios.core.routing import route
+from itertools import count
 
 
 # logs
@@ -27,6 +27,10 @@ if not bootstrap:
 producer = KafkaProducer(
     bootstrap_servers=bootstrap,
     security_protocol="PLAINTEXT",
+    partitioner=lambda key, all_parts, avail_parts, _c=count(): (
+        (avail_parts or all_parts)[next(_c) % len(avail_parts or all_parts)]
+        if (avail_parts or all_parts) else None
+    ),
 )
 hostname = str.encode(socket.gethostname())
 
@@ -54,28 +58,6 @@ def verificar_webhook():
         else:
             return jsonify({"status": "error", "message": "Token de verificación inválido"}), 403
     return jsonify({"status": "error", "message": "Parámetros faltantes"}), 400
-
-
-def build_key(data):
-    """Construye una clave estable para Kafka usando message_id y remitente."""
-
-    try:
-        changes = data["entry"][0].get("changes", [])
-        value = changes[0].get("value", {})
-        wa_id = value.get("contacts", [{}])[0].get("wa_id", "unknown")
-
-        if "messages" in value and value["messages"]:
-            message_id = value["messages"][0].get("id", str(uuid.uuid4()))
-        elif "statuses" in value and value["statuses"]:
-            message_id = value["statuses"][0].get("id", str(uuid.uuid4()))
-        else:
-            message_id = str(uuid.uuid4())
-
-        key = f"{wa_id}_{message_id}"
-    except Exception:
-        key = str(uuid.uuid4())
-
-    return key.encode("utf-8")
 
 
 def get_topic(data):
@@ -148,12 +130,10 @@ def dispatch_message(data):
     msg_id = get_message_id(data)
     number_id = get_number_id(data)
     phone = get_phone_number(data)
-    _key = build_key(data)
-
     job_id = log_db(content, phone, topic, number_id, msg_id)
     message = build_message(content, phone, msg_id, number_id, job_id, topic)
 
-    send_to_kafka(message, _key, topic)
+    send_to_kafka(message, topic)
     logger.info(f"Sent to kafka, job_id: {job_id}")
 
     return job_id
@@ -180,13 +160,12 @@ def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessa
             **base_args,
             text=str(content)
         )
-def send_to_kafka(msg, key, topic):
+def send_to_kafka(msg, topic):
     """Encola el mensaje en Kafka."""
     payload = msg.model_dump_json().encode("utf-8")
 
     future = producer.send(
         topic,
-        key=key,
         value=payload,
     )
     future.add_callback(on_success)

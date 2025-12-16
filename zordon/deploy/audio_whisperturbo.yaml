@@ -4,8 +4,6 @@ metadata:
   name: whisper-turbo-config
   namespace: remedios
 data:
-  KAFKA_TOPIC: "whatsapp-audio"
-  KAFKA_GROUP_ID: "whatsapp-audio-turbo"
   WHISPER_MODEL: "BorisFaj/whisperL-v3-turbo"
 ---
 apiVersion: apps/v1

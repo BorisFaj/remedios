@@ -6,13 +6,10 @@ toolchain go1.24.11
 
 require (
 	github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20251213073744-2551e4ce98db
-	github.com/go-audio/wav v1.1.0
 	github.com/segmentio/kafka-go v0.4.46
 )
 
 require (
-	github.com/go-audio/audio v1.0.0 // indirect
-	github.com/go-audio/riff v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 )
