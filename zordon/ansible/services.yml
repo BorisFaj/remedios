@@ -92,6 +92,13 @@
         mode: "0644"
       when: (deploy_remedios | default(false) | bool) == true
 
+    - name: Copiar network policy de remedios (dispatcher)
+      copy:
+        src: ../deploy/remedios-networkpolicy.yaml
+        dest: "{{ app_root }}/deploy/remedios-networkpolicy.yaml"
+        mode: "0644"
+      when: (deploy_remedios | default(false) | bool) == true
+
     - name: Copiar manifiesto de remetext
       copy:
         src: ../deploy/remetext.yaml
@@ -223,6 +230,10 @@
 
     - name: Aplicar manifiesto de remedios
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/remedios.rendered.yaml
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Aplicar network policy de remedios
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remedios-networkpolicy.yaml
       when: (deploy_remedios | default(false) | bool) == true
 
     - name: Reiniciar deployment remedios para coger cambios
