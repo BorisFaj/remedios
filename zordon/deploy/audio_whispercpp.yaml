@@ -45,8 +45,6 @@ spec:
             name: whisper-cpp-config
         - secretRef:
             name: remedios-secrets
-        - secretRef:
-            name: internal-api-token
         ports:
         - containerPort: 8001
         - containerPort: 9000
