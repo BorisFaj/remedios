@@ -15,6 +15,8 @@
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
     remedios_manifest: "{{ app_root }}/deploy/remedios.yaml"
+    dispatcher_image: "ghcr.io/borisfaj/remedios-dispatcher:latest"
+    api_image: "ghcr.io/borisfaj/remedios-api:latest"
     whisper_cpp_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
     whisper_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
   tasks:
@@ -85,7 +87,7 @@
           - "--exclude=__pycache__"
           - "--exclude=.git"
 
-    - name: Copiar manifiesto de remedios (dispatcher)
+    - name: Copiar manifiesto de remedios (dispatcher + api)
       copy:
         src: ../deploy/remedios.yaml
         dest: "{{ remedios_manifest }}"
