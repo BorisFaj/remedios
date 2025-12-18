@@ -5,7 +5,7 @@ metadata:
   namespace: remedios
 data:
   WHISPER_MODEL: "BorisFaj/whisperL-v3-turbo"
-  INTERNAL_API_URL: "http://remedios"
+  INTERNAL_API_URL: "http://remedios-api"
 ---
 apiVersion: apps/v1
 kind: Deployment

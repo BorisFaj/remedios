@@ -14,30 +14,32 @@ metadata:
   namespace: remedios
 data:
   BOOTSTRAP_SERVER: "kafka.kafka.svc.cluster.local:9092"
+  INTERNAL_API_URL: "http://remedios-api"
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: remedios
+  name: dispatcher
   namespace: remedios
   labels:
-    app: remedios
+    app: dispatcher
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: remedios
+      app: dispatcher
   template:
     metadata:
       labels:
-        app: remedios
+        app: dispatcher
     spec:
       imagePullSecrets:
         - name: ghcr-creds
       containers:
-        - name: remedios
+        - name: dispatcher
           image: ghcr.io/borisfaj/remedios:latest
           imagePullPolicy: Always
+          command: ["/app/remedios/.venv/bin/python", "-m", "remedios.core.dispatcher.producer"]
           envFrom:
             - configMapRef:
                 name: remedios-config
@@ -48,6 +50,11 @@ spec:
           env:
             - name: ORACLE_WALLET_PATH
               value: /opt/oracle/wallet
+            - name: INTERNAL_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: remedios-secrets
+                  key: INTERNAL_API_TOKEN
           ports:
             - containerPort: 3000
           readinessProbe:
@@ -74,12 +81,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: remedios
+  name: dispatcher
   namespace: remedios
 spec:
   type: ClusterIP
   selector:
-    app: remedios
+    app: dispatcher
   ports:
     - port: 80
       targetPort: 3000
@@ -103,13 +110,88 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: remedios
+                name: dispatcher
                 port:
                   number: 80
           - path: /webhook
             pathType: Prefix
             backend:
               service:
-                name: remedios
+                name: dispatcher
                 port:
                   number: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remedios-api
+  namespace: remedios
+  labels:
+    app: remedios-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: remedios-api
+  template:
+    metadata:
+      labels:
+        app: remedios-api
+    spec:
+      imagePullSecrets:
+        - name: ghcr-creds
+      containers:
+        - name: remedios-api
+          image: ghcr.io/borisfaj/remedios:latest
+          imagePullPolicy: Always
+          command: ["/app/remedios/.venv/bin/python", "-m", "remedios.core.api.server"]
+          envFrom:
+            - configMapRef:
+                name: remedios-config
+            - secretRef:
+                name: remedios-secret
+            - secretRef:
+                name: remedios-secrets
+          env:
+            - name: ORACLE_WALLET_PATH
+              value: /opt/oracle/wallet
+            - name: INTERNAL_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: remedios-secrets
+                  key: INTERNAL_API_TOKEN
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - name: oracle-wallet
+              mountPath: /opt/oracle/wallet
+              readOnly: true
+      volumes:
+        - name: oracle-wallet
+          secret:
+            secretName: oracle-wallet
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: remedios-api
+  namespace: remedios
+spec:
+  selector:
+    app: remedios-api
+  ports:
+    - port: 3000
+      targetPort: 3000
