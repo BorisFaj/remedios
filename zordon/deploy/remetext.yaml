@@ -41,6 +41,8 @@ spec:
         env:
         - name: ORACLE_WALLET_PATH
           value: /opt/oracle/wallet
+        - name: INTERNAL_API_URL
+          value: http://remedios-api
         ports:
         - containerPort: 8080
         volumeMounts:
