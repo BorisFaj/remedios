@@ -14,7 +14,8 @@
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
-    remedios_manifest: "{{ app_root }}/deploy/remedios.yaml"
+    dispatcher_manifest: "{{ app_root }}/deploy/dispatcher.yaml"
+    api_manifest: "{{ app_root }}/deploy/remedios-api.yaml"
     dispatcher_image: "ghcr.io/borisfaj/remedios-dispatcher:latest"
     api_image: "ghcr.io/borisfaj/remedios-api:latest"
     whisper_cpp_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
@@ -87,10 +88,17 @@
           - "--exclude=__pycache__"
           - "--exclude=.git"
 
-    - name: Copiar manifiesto de remedios (dispatcher + api)
+    - name: Copiar manifiesto de dispatcher
       copy:
-        src: ../deploy/remedios.yaml
-        dest: "{{ remedios_manifest }}"
+        src: ../deploy/dispatcher.yaml
+        dest: "{{ dispatcher_manifest }}"
+        mode: "0644"
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Copiar manifiesto de remedios-api
+      copy:
+        src: ../deploy/remedios-api.yaml
+        dest: "{{ api_manifest }}"
         mode: "0644"
       when: (deploy_remedios | default(false) | bool) == true
 
@@ -99,6 +107,14 @@
         src: ../deploy/remedios-networkpolicy.yaml
         dest: "{{ app_root }}/deploy/remedios-networkpolicy.yaml"
         mode: "0644"
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Aplicar manifiesto de dispatcher
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ dispatcher_manifest }}
+      when: (deploy_remedios | default(false) | bool) == true
+
+    - name: Aplicar manifiesto de remedios-api
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ api_manifest }}
       when: (deploy_remedios | default(false) | bool) == true
 
     - name: Copiar manifiesto de remetext
