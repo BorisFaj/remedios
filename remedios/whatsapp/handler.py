@@ -1,10 +1,11 @@
-import requests
+import base64
 import json
-import os
 import logging
+import os
 import sys
-import subprocess
-import json as jsonlib
+
+import requests
+from flask import Flask, request, jsonify, abort
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,12 +15,29 @@ logging.basicConfig(
     ],
 )
 
-logger = logging.getLogger(__name__)
-
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 FFPROBE_BIN = os.environ.get("FFPROBE_BIN", "ffprobe")
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
+
+
+sys.stdout.reconfigure(line_buffering=True)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logger = logging.getLogger()
+
+# Flask
+app = Flask(__name__)
+
+
+def _require_internal_token():
+    """Aborta con 401 si el token interno no coincide."""
+    if not INTERNAL_API_TOKEN:
+        return
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header != f"Bearer {INTERNAL_API_TOKEN}":
+        abort(401, description="Token inválido")
 
 
 def get_audio_metadata(request: dict) -> dict:
@@ -119,14 +137,7 @@ def get_number_id(request: dict) -> str | None:
         .get("phone_number_id")
     )
 
-
-def send_text_answer(text: str, phone_number: int, message_id: str, number_id: str) -> None:
-
-    if not GRAPH_API_TOKEN or not GRAPH_URL:
-        logger.error("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta")
-        return
-
-    # Envia una respuesta
+def _send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
     response_data = {
         "messaging_product": "whatsapp",
         "to": phone_number,
@@ -136,7 +147,6 @@ def send_text_answer(text: str, phone_number: int, message_id: str, number_id: s
 
     _post_graph(f"{GRAPH_URL}/{number_id}/messages", response_data)
 
-    # Marca el mensaje como leido
     mark_read_data = {
         "messaging_product": "whatsapp",
         "status": "read",
@@ -144,9 +154,68 @@ def send_text_answer(text: str, phone_number: int, message_id: str, number_id: s
     }
     _post_graph(f"{GRAPH_URL}/{number_id}/messages", mark_read_data)
 
-def extract_audio(message: dict) -> bytes:
-    audio_id = message["audio"]["id"]
-    # mime_type = message["audio"]["mime_type"]
+
+def send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
+    """Permite invocación interna sin pasar por Flask."""
+    if not GRAPH_API_TOKEN or not GRAPH_URL:
+        raise RuntimeError("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta")
+
+    _send_text_answer(text, phone_number, message_id, number_id)
+
+
+@app.route("/internal/send_text_answer", methods=["POST"])
+def send_text_answer_api():
+    """Endpoint interno para enviar un texto y marcar el mensaje como leído."""
+    _require_internal_token()
+    payload = request.get_json(silent=True) or {}
+    text = payload.get("text")
+    phone_number = payload.get("phone_number")
+    message_id = payload.get("message_id")
+    number_id = payload.get("number_id")
+
+    missing = [k for k, v in {"text": text, "phone_number": phone_number, "message_id": message_id, "number_id": number_id}.items() if not v]
+    if missing:
+        return jsonify({"status": "error", "message": f"Faltan campos: {', '.join(missing)}"}), 400
+
+    try:
+        send_text_answer(text, phone_number, message_id, number_id)
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.exception("Error enviando respuesta a WhatsApp: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/internal/extract_audio", methods=["POST"])
+def extract_audio_api():
+    """Endpoint interno que devuelve el audio en base64 dado su audio_id."""
+    _require_internal_token()
+    payload = request.get_json(silent=True) or {}
+    audio_id = payload.get("audio_id")
+    if not audio_id:
+        return jsonify({"status": "error", "message": "audio_id requerido"}), 400
+
+    try:
+        audio_file = extract_audio(audio_id)
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.exception("Error obteniendo audio %s: %s", audio_id, exc)
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+    encoded = base64.b64encode(audio_file).decode("utf-8")
+    return jsonify(
+        {
+            "status": "ok",
+            "audio_id": audio_id,
+            "audio_b64": encoded,
+            "size_bytes": len(audio_file),
+        }
+    )
+
+
+def extract_audio(audio_id: str) -> bytes:
+    """Descarga el audio desde Graph y devuelve los bytes."""
+    if not GRAPH_API_TOKEN or not GRAPH_URL:
+        raise RuntimeError("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede obtener audio")
 
     logger.debug(f"buscando audio {audio_id}...")
     response_url = requests.get("{}/{}".format(GRAPH_URL, audio_id), headers=__HEADERS)
@@ -163,10 +232,10 @@ def extract_audio(message: dict) -> bytes:
         else:
             logger.error(f"Error al descargar el archivo: {response_url.status_code}")
             logger.error(response_url.text)
-            return b""
+            raise RuntimeError(f"Error al descargar el archivo: {response_url.status_code}")
     else:
         logger.error("URL no recibida :(")
-        return b""
+        raise RuntimeError(f"URL no recibida: status={response_url.status_code}")
 
     return audio_file
 

@@ -1,3 +1,4 @@
+import functools
 import os
 import warnings
 from typing import Tuple
@@ -7,32 +8,36 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 # Selección de dispositivo
 if torch.cuda.is_available():
-    device = "cuda:0"
-    torch_dtype = torch.float16
+    _device = "cuda:0"
+    _torch_dtype = torch.float16
 else:
-    device = "cpu"
-    torch_dtype = torch.float32
+    _device = "cpu"
+    _torch_dtype = torch.float32
     warnings.warn("⚠️ No se encontró una GPU disponible. Ejecutando en CPU, esto será más lento.")
 
-# Modelo configurable por env (fallback a un modelo más pequeño)
-whisper_model_id = os.getenv("WHISPER_MODEL", "BorisFaj/whisperL-v3-turbo")
-whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
-    whisper_model_id, torch_dtype=torch_dtype, use_safetensors=True
-).to(device)
-
-processor = AutoProcessor.from_pretrained(whisper_model_id)
+_whisper_model_id = os.getenv("WHISPER_MODEL", "BorisFaj/whisperL-v3-turbo")
 
 
-def transcribe(file_name) -> Tuple[str, float]:
-    """Devuelve (texto, duracion_s|None) usando los timestamps del pipeline."""
-    pipe = pipeline(
+@functools.lru_cache(maxsize=1)
+def _get_pipeline():
+    """Carga perezosa del modelo/pipeline para evitar descargas en import."""
+    whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        _whisper_model_id, torch_dtype=_torch_dtype, use_safetensors=True
+    ).to(_device)
+    processor = AutoProcessor.from_pretrained(_whisper_model_id)
+    return pipeline(
         "automatic-speech-recognition",
         model=whisper_model,
         tokenizer=processor.tokenizer,
         feature_extractor=processor.feature_extractor,
-        torch_dtype=torch_dtype,
-        device=device,
+        torch_dtype=_torch_dtype,
+        device=_device,
     )
+
+
+def transcribe(file_name) -> Tuple[str, float | None]:
+    """Devuelve (texto, duracion_s|None) usando los timestamps del pipeline."""
+    pipe = _get_pipeline()
 
     with torch.inference_mode():
         result = pipe(file_name, return_timestamps=True, generate_kwargs={"language": "spanish"})

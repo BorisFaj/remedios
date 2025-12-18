@@ -1,7 +1,8 @@
-import threading
+import base64
+import json
 import logging
 import os
-import json
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -9,10 +10,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
 from kafka import KafkaConsumer, KafkaProducer
 from pydantic import ValidationError
-import requests
 from remedios.core.routing import route
-from remedios.whatsapp.audio import run
 from remedios.commons.schemas import IncomingMessage, AudioMessage, InvalidMessageError
+from remedios.commons.utils import post_internal_api
+from .stt import transcribe
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("whisper-turbo-consumer")
@@ -67,21 +68,44 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
         max_poll_records=1,
     )
 
+def _fetch_audio_bytes(msg: AudioMessage, cfg: Dict[str, str]) -> bytes:
+    """Descarga el audio vía API interna y lo devuelve en bytes."""
+    resp = post_internal_api(
+        cfg["internal_api_url"],
+        cfg["internal_api_token"],
+        "/internal/extract_audio",
+        {"audio_id": msg.audio_id},
+    )
+    try:
+        data = resp.json() or {}
+    except ValueError as exc:
+        raise RuntimeError("Respuesta no JSON de extract_audio") from exc
 
-def _headers(cfg):
-    return {
-        "Authorization": f"Bearer {cfg['internal_api_token']}",
-        "Content-Type": "application/json",
-    }
+    if data.get("status") and data.get("status") != "ok":
+        raise RuntimeError(data.get("message") or "extract_audio devolvió error")
+
+    audio_b64 = data.get("audio_b64")
+    if not audio_b64:
+        raise RuntimeError("Audio vacío devuelto por extract_audio")
+
+    try:
+        return base64.b64decode(audio_b64)
+    except Exception as exc:
+        raise RuntimeError("Audio inválido devuelto por extract_audio") from exc
 
 
-def _post(cfg, path: str, payload: dict):
-    url = f"{cfg['internal_api_url']}{path}"
-    resp = requests.post(url, headers=_headers(cfg), json=payload, timeout=10)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"POST {url} failed status={resp.status_code} body={resp.text}")
-    return resp
-
+def _send_text_answer(msg: AudioMessage, text: str, cfg: Dict[str, str]):
+    post_internal_api(
+        cfg["internal_api_url"],
+        cfg["internal_api_token"],
+        "/internal/send_text_answer",
+        {
+            "text": text,
+            "phone_number": msg.phone,
+            "message_id": msg.message_id,
+            "number_id": msg.number_id,
+        },
+    )
 
 def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
@@ -96,20 +120,31 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
         started = time.time()
         started_at = datetime.now(timezone.utc)
-        _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "processing"})
+        post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], "/internal/job_status", {"job_id": msg.job_id, "status": "processing"})
 
-        transcript, duration = run(msg)
+        audio_bytes = _fetch_audio_bytes(msg, cfg)
+        transcript, duration = transcribe(audio_bytes)
+        transcript = transcript.strip() if transcript else ""
+        final_response = transcript or "No pude entender tu audio."
+        _send_text_answer(msg, final_response, cfg)
+
         duration_ms = int((time.time() - started) * 1000)
         finished_at = datetime.now(timezone.utc)
-        # Duración de audio si venía en el mensaje
 
-        _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "completed"})
-        _post(
-            cfg,
-            "/internal/job_result",
+        post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], "/internal/job_status",
+                          {"job_id": msg.job_id, "status": "completed"})
+
+        post_internal_api(
+            cfg['internal_api_url'],
+            cfg['internal_api_token'],
+            "/internal/job_status",
             {
                 "job_id": msg.job_id,
-                "result": {"transcript": transcript, "audio_id": msg.audio_id},
+                "result": {
+                    "transcript": transcript,
+                    "response_text": final_response,
+                    "audio_id": msg.audio_id,
+                },
                 "output_ref": "whisper-turbo",
                 "duration_ms": duration_ms,
                 "started_at": started_at.isoformat(),
@@ -120,7 +155,8 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
         return True
     except Exception as exc:
         try:
-            _post(cfg, "/internal/job_status", {"job_id": msg.job_id, "status": "failed", "error_message": str(exc)})
+            post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], "/internal/job_status",
+                              {"job_id": msg.job_id, "status": "failed", "error_message": str(exc)})
         except Exception:
             logger.exception("Error notificando estado failed a API interna job_id=%s", msg.job_id)
         logger.exception("Error procesando job_id=%s", msg.job_id)
