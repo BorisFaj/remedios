@@ -37,7 +37,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: dispatcher
-          image: ghcr.io/borisfaj/remedios:latest
+          image: ghcr.io/borisfaj/remedios-dispatcher:latest
           imagePullPolicy: Always
           command: ["/app/remedios/.venv/bin/python", "-m", "remedios.core.dispatcher.producer"]
           envFrom:
@@ -143,7 +143,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: remedios-api
-          image: ghcr.io/borisfaj/remedios:latest
+          image: ghcr.io/borisfaj/remedios-api:latest
           imagePullPolicy: Always
           command: ["/app/remedios/.venv/bin/python", "-m", "remedios.core.api.server"]
           envFrom:
