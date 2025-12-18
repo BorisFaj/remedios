@@ -10,7 +10,7 @@ from typing import Dict
 from kafka import KafkaConsumer, KafkaProducer
 from pydantic import ValidationError
 from remedios.core.routing import route
-from remedios.commons.chat.fool import ask
+from remedios.consumers.text.fool import ask
 from remedios.commons.schemas import IncomingMessage, TextMessage, InvalidMessageError
 from remedios.log.sender import update_job_status, save_job_result
 from remedios.commons.utils import post_internal_api
