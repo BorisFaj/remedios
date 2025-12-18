@@ -97,6 +97,30 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
+@app.route("/internal/log_message", methods=["POST"])
+def internal_log_message():
+    if not _check_internal_auth():
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    topic = payload.get("topic")
+    phone = payload.get("phone")
+    number_id = payload.get("number_id")
+    message_id = payload.get("message_id")
+    content = payload.get("content")
+
+    missing = [k for k, v in {"topic": topic, "phone": phone, "message_id": message_id}.items() if not v]
+    if missing:
+        return jsonify({"error": f"topic, phone y message_id son requeridos; faltan: {', '.join(missing)}"}), 400
+
+    try:
+        job_id = log_db(content, phone, topic, number_id, message_id)
+    except Exception as exc:
+        logger.exception("Error registrando mensaje en DB")
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify({"status": "ok", "job_id": job_id}), 200
+
+
 @app.route("/internal/job_status", methods=["POST"])
 def internal_job_status():
     if not _check_internal_auth():

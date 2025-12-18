@@ -1,17 +1,25 @@
-from flask import Flask, request, jsonify, abort
-import socket
-from kafka import KafkaProducer
+import atexit
 import json
-import sys
 import logging
 import os
-import atexit
+import socket
+import sys
 from datetime import datetime, timezone
-from remedios.commons.schemas import TextMessage, AudioMessage
-from remedios.whatsapp.handler import get_phone_number, get_message, get_message_id, get_number_id, get_audio_metadata
-from remedios.core.routing import route
-from remedios.core.api import log_db
 from itertools import count
+
+from flask import Flask, jsonify, request
+from kafka import KafkaProducer
+
+from remedios.commons.schemas import TextMessage, AudioMessage
+from remedios.commons.utils import post_internal_api
+from remedios.core.routing import route
+from remedios.whatsapp.handler import (
+    get_audio_metadata,
+    get_message,
+    get_message_id,
+    get_number_id,
+    get_phone_number,
+)
 
 
 # logs
@@ -23,6 +31,16 @@ logger = logging.getLogger()
 bootstrap = os.environ.get("BOOTSTRAP_SERVER")
 if not bootstrap:
     raise RuntimeError("BOOTSTRAP_SERVER es obligatorio para inicializar el productor Kafka")
+
+INTERNAL_API_URL = os.environ.get("INTERNAL_API_URL")
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
+
+if not INTERNAL_API_URL:
+    raise RuntimeError("INTERNAL_API_URL es obligatorio para contactar la API interna")
+if not INTERNAL_API_TOKEN:
+    raise RuntimeError("INTERNAL_API_TOKEN es obligatorio para contactar la API interna")
+
+INTERNAL_API_URL = INTERNAL_API_URL.rstrip("/")
 
 producer = KafkaProducer(
     bootstrap_servers=bootstrap,
@@ -92,17 +110,17 @@ def dispatch_message(data):
         return None
 
     topic = get_topic(data)
-    
+
     content = None
     if topic == route["audio"]:
-         content = get_audio_metadata(data)
+        content = get_audio_metadata(data)
     else:
-         content = get_message(data)
+        content = get_message(data)
 
     msg_id = get_message_id(data)
     number_id = get_number_id(data)
     phone = get_phone_number(data)
-    job_id = log_db(content, phone, topic, number_id, msg_id)  # ToDo
+    job_id = _create_job(content, phone, topic, number_id, msg_id)
     message = build_message(content, phone, msg_id, number_id, job_id, topic)
 
     send_to_kafka(message, topic)
@@ -132,6 +150,26 @@ def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessa
             **base_args,
             text=str(content)
         )
+
+
+def _create_job(content, phone, topic, number_id, msg_id):
+    payload = {
+        "topic": topic,
+        "phone": phone,
+        "number_id": number_id,
+        "message_id": msg_id,
+        "content": content,
+    }
+    resp = post_internal_api(INTERNAL_API_URL, INTERNAL_API_TOKEN, "/internal/log_message", payload)
+    try:
+        data = resp.json() or {}
+    except ValueError as exc:
+        raise RuntimeError("Respuesta no JSON de API interna al registrar mensaje") from exc
+
+    job_id = data.get("job_id")
+    if not job_id:
+        raise RuntimeError("API interna no devolvió job_id")
+    return job_id
 def send_to_kafka(msg, topic):
     """Encola el mensaje en Kafka."""
     payload = msg.model_dump_json().encode("utf-8")
