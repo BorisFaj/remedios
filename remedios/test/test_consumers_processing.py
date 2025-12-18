@@ -17,9 +17,20 @@ def _encode_msg(model):
 def test_text_consumer_updates_job(monkeypatch):
     status_calls = []
     save_calls = []
+    calls = []
 
-    monkeypatch.setattr(text_consumer, "run", lambda msg: "ok")
+    monkeypatch.setattr(text_consumer, "ask", lambda text: "ok")
 
+    def fake_post_internal(url, token, path, payload):
+        calls.append((path, payload))
+
+        class FakeResp:
+            def json(self):
+                return {"status": "ok"}
+
+        return FakeResp()
+
+    monkeypatch.setattr(text_consumer, "post_internal_api", fake_post_internal)
     def fake_update(job_id, status, error):
         status_calls.append((job_id, status, error))
         return True
@@ -42,7 +53,8 @@ def test_text_consumer_updates_job(monkeypatch):
         text="hola",
     )
 
-    text_consumer.process_message(_encode_msg(msg))
+    cfg = {"internal_api_url": "http://internal", "internal_api_token": "tok"}
+    text_consumer.process_message(_encode_msg(msg), cfg)
 
     assert ("processing" in {s for _, s, _ in status_calls})
     assert ("completed" in {s for _, s, _ in status_calls})
@@ -51,6 +63,7 @@ def test_text_consumer_updates_job(monkeypatch):
     assert kwargs["duration_ms"] >= 0
     assert kwargs["started_at"] is not None
     assert kwargs["finished_at"] is not None
+    assert any(path == "/internal/send_text_answer" for path, _ in calls)
 
 
 def test_audio_consumer_transcribes_and_replies(monkeypatch):

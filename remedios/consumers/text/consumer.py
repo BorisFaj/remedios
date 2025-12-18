@@ -1,7 +1,7 @@
-import threading
+import json
 import logging
 import os
-import json
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -10,9 +10,10 @@ from typing import Dict
 from kafka import KafkaConsumer, KafkaProducer
 from pydantic import ValidationError
 from remedios.core.routing import route
-from remedios.whatsapp.text import run
+from remedios.commons.chat.fool import ask
 from remedios.commons.schemas import IncomingMessage, TextMessage, InvalidMessageError
 from remedios.log.sender import update_job_status, save_job_result
+from remedios.commons.utils import post_internal_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("text-consumer")
@@ -40,7 +41,7 @@ def start_health_server(port: int = 8080):
 
 
 def load_config() -> Dict[str, str]:
-    required = ["BOOTSTRAP_SERVER"]
+    required = ["BOOTSTRAP_SERVER", "INTERNAL_API_URL", "INTERNAL_API_TOKEN"]
     missing = [key for key in required if not os.environ.get(key)]
     if missing:
         raise RuntimeError(f"Faltan variables requeridas: {', '.join(missing)}")
@@ -50,6 +51,8 @@ def load_config() -> Dict[str, str]:
         "text_topic": os.environ.get("TEXT_TOPIC", route["text"]),
         "dlq_topic": os.environ.get("DLQ_TOPIC", route["dlq"]),
         "group_id": os.environ.get("GROUP_ID", "whatsapp-text-consumer"),
+        "internal_api_url": os.environ["INTERNAL_API_URL"].rstrip("/"),
+        "internal_api_token": os.environ["INTERNAL_API_TOKEN"],
     }
 
 
@@ -62,9 +65,21 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
         auto_offset_reset="latest",
         value_deserializer=None
     )
-import importlib
+def _send_text_answer(msg: TextMessage, text: str, cfg: Dict[str, str]):
+    post_internal_api(
+        cfg["internal_api_url"],
+        cfg["internal_api_token"],
+        "/internal/send_text_answer",
+        {
+            "text": text,
+            "phone_number": msg.phone,
+            "message_id": msg.message_id,
+            "number_id": msg.number_id,
+        },
+    )
 
-def process_message(raw: bytes):
+
+def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
         base = IncomingMessage.model_validate_json(raw)
     except ValidationError as e:
@@ -80,20 +95,18 @@ def process_message(raw: bytes):
             started_at = datetime.now(timezone.utc)
             update_job_status(msg.job_id, "processing", None)
 
-            result = run(msg)
+            result = ask(msg.text)
+            _send_text_answer(msg, result, cfg)
+
             duration_ms = int((time.time() - started) * 1000)
             finished_at = datetime.now(timezone.utc)
 
             update_job_status(msg.job_id, "completed", None)
 
-            mod = importlib.import_module(run.__module__)
-            ask_fn = getattr(mod, "ask", None)
-            output_ref = f"{ask_fn.__module__}.{ask_fn.__name__}" if callable(ask_fn) else None
-
             save_job_result(
                 msg.job_id,
                 {"answer": result, "input": msg.text},
-                output_ref=output_ref,
+                output_ref=f"{ask.__module__}.{ask.__name__}",
                 duration_ms=duration_ms,
                 started_at=started_at,
                 finished_at=finished_at,
@@ -103,6 +116,7 @@ def process_message(raw: bytes):
             raise exc
     else:
         raise InvalidMessageError(f"Unsupported message_type={base.message_type}")
+    return True
 
 
 def main():
@@ -125,7 +139,7 @@ def main():
 
     for record in consumer:
         try:
-            process_message(record.value)
+            process_message(record.value, cfg)
             consumer.commit()
         except InvalidMessageError as e:
             logger.exception("Mensaje inválido topic=%s offset=%s", record.topic, record.offset)
