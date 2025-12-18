@@ -48,7 +48,9 @@
       delegate_to: localhost
       run_once: true
       become: false
-      when: wallet_src | length > 0
+      when:
+        - wallet_src | length > 0
+        - (deploy_remedios_api | default(false) | bool) == true
 
     - name: Abortar si la ruta de wallet no existe en el controlador
       fail:
@@ -57,6 +59,7 @@
         - wallet_src | length > 0
         - wallet_file.stat is defined
         - not wallet_file.stat.exists
+        - (deploy_remedios_api | default(false) | bool) == true
 
     - name: Abortar si el wallet no es una carpeta (descomprime localmente el zip)
       fail:
@@ -66,6 +69,7 @@
         - wallet_file.stat is defined
         - wallet_file.stat.exists
         - not wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
 
     - name: Crear carpetas de trabajo
       file:
@@ -93,29 +97,29 @@
         src: ../deploy/dispatcher.yaml
         dest: "{{ dispatcher_manifest }}"
         mode: "0644"
-      when: (deploy_remedios | default(false) | bool) == true
+      when: (deploy_dispatcher | default(false) | bool) == true
 
     - name: Copiar manifiesto de remedios-api
       copy:
         src: ../deploy/remedios-api.yaml
         dest: "{{ api_manifest }}"
         mode: "0644"
-      when: (deploy_remedios | default(false) | bool) == true
+      when: (deploy_remedios_api | default(false) | bool) == true
 
     - name: Copiar network policy de remedios (dispatcher)
       copy:
         src: ../deploy/remedios-networkpolicy.yaml
         dest: "{{ app_root }}/deploy/remedios-networkpolicy.yaml"
         mode: "0644"
-      when: (deploy_remedios | default(false) | bool) == true
+      when: (deploy_dispatcher | default(false) | bool) == true
 
     - name: Aplicar manifiesto de dispatcher
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ dispatcher_manifest }}
-      when: (deploy_remedios | default(false) | bool) == true
+      when: (deploy_dispatcher | default(false) | bool) == true
 
     - name: Aplicar manifiesto de remedios-api
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ api_manifest }}
-      when: (deploy_remedios | default(false) | bool) == true
+      when: (deploy_remedios_api | default(false) | bool) == true
 
     - name: Copiar manifiesto de remetext
       copy:
@@ -167,6 +171,7 @@
         - wallet_src | length > 0
         - wallet_file.stat.exists
         - wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
 
     - name: Crear/actualizar secret oracle-wallet desde carpeta descomprimida
       shell: |
@@ -178,6 +183,7 @@
         - wallet_src | length > 0
         - wallet_file.stat.exists
         - wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
 
     - name: Validar credenciales de GHCR en .secrets
       shell: |
@@ -216,6 +222,7 @@
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
         rm -f "$tmp"
+      when: (deploy_dispatcher | default(false) | bool) or (deploy_remedios_api | default(false) | bool) or (deploy_remetext | default(false) | bool) or (deploy_whisper_turbo | default(false) | bool) or (deploy_whisper_cpp | default(false) | bool)
 
     - name: Crear/actualizar pull secret ghcr-creds para GHCR (si hay credenciales)
       shell: |
