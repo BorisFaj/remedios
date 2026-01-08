@@ -12,7 +12,6 @@ from pydantic import ValidationError
 from remedios.core.routing import route
 from remedios.consumers.text.fool import ask
 from remedios.commons.schemas import IncomingMessage, TextMessage, InvalidMessageError
-from remedios.log.sender import update_job_status, save_job_result
 from remedios.commons.utils import post_internal_api
 
 logging.basicConfig(level=logging.INFO)
@@ -93,7 +92,12 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
                 raise InvalidMessageError("job_id requerido en el mensaje")
             started = time.time()
             started_at = datetime.now(timezone.utc)
-            update_job_status(msg.job_id, "processing", None)
+            post_internal_api(
+                cfg["internal_api_url"],
+                cfg["internal_api_token"],
+                "/internal/job_status",
+                {"job_id": msg.job_id, "status": "processing"},
+            )
 
             result = ask(msg.text)
             _send_text_answer(msg, result, cfg)
@@ -101,18 +105,33 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
             duration_ms = int((time.time() - started) * 1000)
             finished_at = datetime.now(timezone.utc)
 
-            update_job_status(msg.job_id, "completed", None)
+            post_internal_api(
+                cfg["internal_api_url"],
+                cfg["internal_api_token"],
+                "/internal/job_status",
+                {"job_id": msg.job_id, "status": "completed"},
+            )
 
-            save_job_result(
-                msg.job_id,
-                {"answer": result, "input": msg.text},
-                output_ref=f"{ask.__module__}.{ask.__name__}",
-                duration_ms=duration_ms,
-                started_at=started_at,
-                finished_at=finished_at,
+            post_internal_api(
+                cfg["internal_api_url"],
+                cfg["internal_api_token"],
+                "/internal/job_result",
+                {
+                    "job_id": msg.job_id,
+                    "result": {"answer": result, "input": msg.text},
+                    "output_ref": f"{ask.__module__}.{ask.__name__}",
+                    "duration_ms": duration_ms,
+                    "started_at": started_at.isoformat(),
+                    "finished_at": finished_at.isoformat(),
+                },
             )
         except Exception as exc:
-            update_job_status(msg.job_id, "failed", str(exc))
+            post_internal_api(
+                cfg["internal_api_url"],
+                cfg["internal_api_token"],
+                "/internal/job_status",
+                {"job_id": msg.job_id, "status": "failed", "error_message": str(exc)},
+            )
             raise exc
     else:
         raise InvalidMessageError(f"Unsupported message_type={base.message_type}")

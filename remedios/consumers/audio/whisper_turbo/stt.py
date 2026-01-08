@@ -1,19 +1,6 @@
 import functools
 import os
-import warnings
 from typing import Tuple
-
-import torch
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
-
-# Selección de dispositivo
-if torch.cuda.is_available():
-    _device = "cuda:0"
-    _torch_dtype = torch.float16
-else:
-    _device = "cpu"
-    _torch_dtype = torch.float32
-    warnings.warn("⚠️ No se encontró una GPU disponible. Ejecutando en CPU, esto será más lento.")
 
 _whisper_model_id = os.getenv("WHISPER_MODEL", "BorisFaj/whisperL-v3-turbo")
 
@@ -21,17 +8,30 @@ _whisper_model_id = os.getenv("WHISPER_MODEL", "BorisFaj/whisperL-v3-turbo")
 @functools.lru_cache(maxsize=1)
 def _get_pipeline():
     """Carga perezosa del modelo/pipeline para evitar descargas en import."""
+    import warnings
+
+    import torch
+    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+
+    if torch.cuda.is_available():
+        device = "cuda:0"
+        torch_dtype = torch.float16
+    else:
+        device = "cpu"
+        torch_dtype = torch.float32
+        warnings.warn("⚠️ No se encontró una GPU disponible. Ejecutando en CPU, esto será más lento.")
+
     whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        _whisper_model_id, torch_dtype=_torch_dtype, use_safetensors=True
-    ).to(_device)
+        _whisper_model_id, torch_dtype=torch_dtype, use_safetensors=True
+    ).to(device)
     processor = AutoProcessor.from_pretrained(_whisper_model_id)
     return pipeline(
         "automatic-speech-recognition",
         model=whisper_model,
         tokenizer=processor.tokenizer,
         feature_extractor=processor.feature_extractor,
-        torch_dtype=_torch_dtype,
-        device=_device,
+        torch_dtype=torch_dtype,
+        device=device,
     )
 
 
