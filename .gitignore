@@ -395,4 +395,4 @@ zordon/ansible/inventory.ini
 .idea/*
 .idea/inspectionProfiles/profiles_settings.xml
 /models/
-whisper-cpp-local.yaml
+tmp/*
