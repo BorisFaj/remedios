@@ -1,5 +1,3 @@
-# Remedios
-
 ![Remedios](logo.png)
 
 **Webhook de WhatsApp escalable y ligero, diseñado para Oracle Cloud Always Free (ARM).**
@@ -63,7 +61,7 @@ GHCR_TOKEN=tu_token_ghcr
 WHISPER_MODEL=ggml-large-v3-turbo-q5_0.bin
 ```
 
-No subas este archivo al repositorio. Este repo es público.
+No compartas este archivo.
 
 ### 2. Configurar Inventario
 
