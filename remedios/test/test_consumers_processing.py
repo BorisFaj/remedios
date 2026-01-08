@@ -1,9 +1,5 @@
 import base64
-import json
-import time
 from datetime import datetime, timezone
-
-import pytest
 
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.consumers.text import consumer as text_consumer
