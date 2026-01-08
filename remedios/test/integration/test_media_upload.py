@@ -8,7 +8,7 @@ env_file = find_dotenv(".env")
 load_dotenv(env_file)
 
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
-BUSINESS_NUMBER_ID = "34671276538"
+BUSINESS_NUMBER_ID = "000000000000000"
 
 __URL = "https://graph.facebook.com/v21.0"
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
