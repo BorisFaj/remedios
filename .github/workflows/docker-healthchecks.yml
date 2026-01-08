@@ -60,10 +60,7 @@ jobs:
             port: 3000
             health: /health
             env: |
-              BOOTSTRAP_SERVER=localhost:9092
-              INTERNAL_API_URL=http://localhost:3000
-              INTERNAL_API_TOKEN=dummy
-              WEBHOOK_VERIFY_TOKEN=dummy
+              HEALTHCHECK_ONLY=1
 
     steps:
       - name: Checkout
