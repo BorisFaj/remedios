@@ -22,8 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from remedios.commons.schemas import TextMessage
-from .base import LogBase
+from .models_base import LogBase
 
 # Configuración de logging
 logging.basicConfig(

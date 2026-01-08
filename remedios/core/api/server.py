@@ -7,7 +7,7 @@ import requests
 from flask import Flask, request, jsonify, abort
 from datetime import datetime, timezone
 from remedios.commons.schemas import TextMessage, AudioMessage
-from remedios.log.sender import (
+from remedios.core.api.persistence.storage import (
     validate_user,
     validate_message,
     create_job,
