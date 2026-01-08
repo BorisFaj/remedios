@@ -24,7 +24,7 @@ jobs:
             dockerfile: remedios/consumers/audio/whispercpp/Dockerfile
             port: 8001
             health: /health
-            env: >
+            env: |
               GRAPH_API_TOKEN=dummy
               GRAPH_URL=https://example.com
               WHISPER_MODEL=ggml-tiny.en.bin
@@ -36,21 +36,21 @@ jobs:
             dockerfile: remedios/consumers/audio/whisper_turbo/Dockerfile
             port: 8080
             health: /health
-            env: >
+            env: |
               HEALTHCHECK_ONLY=1
           - name: remetext
             context: .
             dockerfile: remedios/consumers/text/Dockerfile
             port: 8080
             health: /health
-            env: >
+            env: |
               HEALTHCHECK_ONLY=1
           - name: remedios-api
             context: .
             dockerfile: remedios/core/api/Dockerfile
             port: 3000
             health: /health
-            env: >
+            env: |
               INTERNAL_API_TOKEN=dummy
               GRAPH_API_TOKEN=dummy
               GRAPH_URL=https://example.com
@@ -59,7 +59,7 @@ jobs:
             dockerfile: remedios/core/dispatcher/Dockerfile
             port: 3000
             health: /health
-            env: >
+            env: |
               BOOTSTRAP_SERVER=localhost:9092
               INTERNAL_API_URL=http://localhost:3000
               INTERNAL_API_TOKEN=dummy
@@ -77,15 +77,9 @@ jobs:
 
       - name: Run ${{ matrix.name }}
         run: |
-          env_list=()
-          while IFS= read -r line; do
-            line=$(echo "$line" | xargs)
-            [ -z "$line" ] && continue
-            env_list+=("-e" "$line")
-          done <<< "${{ matrix.env }}"
           docker run -d --name ${{ matrix.name }} \
             -p ${{ matrix.port }}:${{ matrix.port }} \
-            "${env_list[@]}" \
+            --env-file <(printf '%s\n' "${{ matrix.env }}") \
             test-${{ matrix.name }}
 
       - name: Wait for health ${{ matrix.name }}
