@@ -29,27 +29,29 @@ logger = logging.getLogger()
 
 # Kafka
 bootstrap = os.environ.get("BOOTSTRAP_SERVER")
-if not bootstrap:
-    raise RuntimeError("BOOTSTRAP_SERVER es obligatorio para inicializar el productor Kafka")
-
 INTERNAL_API_URL = os.environ.get("INTERNAL_API_URL")
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
 
-if not INTERNAL_API_URL:
-    raise RuntimeError("INTERNAL_API_URL es obligatorio para contactar la API interna")
-if not INTERNAL_API_TOKEN:
-    raise RuntimeError("INTERNAL_API_TOKEN es obligatorio para contactar la API interna")
+HEALTHCHECK_ONLY = os.environ.get("HEALTHCHECK_ONLY") == "1"
+producer = None
+if not HEALTHCHECK_ONLY:
+    if not bootstrap:
+        raise RuntimeError("BOOTSTRAP_SERVER es obligatorio para inicializar el productor Kafka")
+    if not INTERNAL_API_URL:
+        raise RuntimeError("INTERNAL_API_URL es obligatorio para contactar la API interna")
+    if not INTERNAL_API_TOKEN:
+        raise RuntimeError("INTERNAL_API_TOKEN es obligatorio para contactar la API interna")
 
-INTERNAL_API_URL = INTERNAL_API_URL.rstrip("/")
+    INTERNAL_API_URL = INTERNAL_API_URL.rstrip("/")
 
-producer = KafkaProducer(
-    bootstrap_servers=bootstrap,
-    security_protocol="PLAINTEXT",
-    partitioner=lambda key, all_parts, avail_parts, _c=count(): (
-        (avail_parts or all_parts)[next(_c) % len(avail_parts or all_parts)]
-        if (avail_parts or all_parts) else None
-    ),
-)
+    producer = KafkaProducer(
+        bootstrap_servers=bootstrap,
+        security_protocol="PLAINTEXT",
+        partitioner=lambda key, all_parts, avail_parts, _c=count(): (
+            (avail_parts or all_parts)[next(_c) % len(avail_parts or all_parts)]
+            if (avail_parts or all_parts) else None
+        ),
+    )
 hostname = str.encode(socket.gethostname())
 
 # Flask
@@ -172,6 +174,8 @@ def _create_job(content, phone, topic, number_id, msg_id):
     return job_id
 def send_to_kafka(msg, topic):
     """Encola el mensaje en Kafka."""
+    if not producer:
+        raise RuntimeError("Kafka producer no inicializado (HEALTHCHECK_ONLY=1)")
     payload = msg.model_dump_json().encode("utf-8")
 
     future = producer.send(
