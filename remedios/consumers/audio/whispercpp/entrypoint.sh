@@ -4,6 +4,11 @@ set -euo pipefail
 MODEL="${WHISPER_MODEL:-/app/ggml-large-v3-turbo-q5_0.bin}"
 REPO="${WHISPER_MODEL_REPO:-ggerganov/whisper.cpp}"
 
+# En modo healthcheck no descargamos modelo ni arrancamos whisper-server.
+if [ "${HEALTHCHECK_ONLY:-}" = "1" ]; then
+  exec /usr/local/bin/whispercpp-consumer
+fi
+
 # Descarga modelo si no existe
 if [ ! -f "$MODEL" ]; then
   mkdir -p "$(dirname "$MODEL")"

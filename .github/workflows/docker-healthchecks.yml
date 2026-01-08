@@ -25,12 +25,8 @@ jobs:
             port: 8001
             health: /health
             env: |
-              GRAPH_API_TOKEN=dummy
-              GRAPH_URL=https://example.com
-              WHISPER_MODEL=ggml-tiny.en.bin
-              WHISPER_MODEL_REPO=ggerganov/whisper.cpp
-              WHISPER_FAKE=1
-              WHISPER_BACKEND=cpp
+              HEALTHCHECK_ONLY=1
+              APP_PORT=8001
           - name: whisper-turbo
             context: .
             dockerfile: remedios/consumers/audio/whisper_turbo/Dockerfile

@@ -118,6 +118,23 @@ func newInternalClient(cfg Config) *internalClient {
 	}
 }
 
+func startHealthServer(port string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	addr := ":" + port
+	go func() {
+		if err := http.ListenAndServe(addr, mux); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("health server error: %v", err)
+		}
+	}()
+	log.Printf("health server on %s/health", addr)
+}
+
 func (c *internalClient) post(ctx context.Context, path string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -448,6 +465,18 @@ func handleMessage(ctx context.Context, cfg Config, internal *internalClient, md
 }
 
 func main() {
+	healthPort := os.Getenv("APP_PORT")
+	if healthPort == "" {
+		healthPort = "8001"
+	}
+	if os.Getenv("HEALTHCHECK_ONLY") == "1" {
+		startHealthServer(healthPort)
+		for {
+			time.Sleep(60 * time.Second)
+		}
+	}
+
+	startHealthServer(healthPort)
 	cfg := loadConfig()
 	internal := newInternalClient(cfg)
 	dlq := newDLQProducer(cfg)
