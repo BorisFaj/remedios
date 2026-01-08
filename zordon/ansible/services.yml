@@ -9,9 +9,15 @@
     remedios_src: "{{ src_dir }}/remedios"
     kubeconfig: /etc/rancher/k3s/k3s.yaml
     secrets_src: "{{ playbook_dir }}/../.secrets"
+    wallet_dir: "{{ app_root }}/wallet"
+    oracle_dsn: "{{ lookup('ini', 'ORACLE_DSN type=properties file=' ~ secrets_src) | default('', true) | trim }}"
     whisper_model: "{{ lookup('env','WHISPER_MODEL') }}"
     whisper_model_repo: "{{ lookup('env','WHISPER_MODEL_REPO') }}"
     whisper_backend: "{{ lookup('env','WHISPER_BACKEND') }}"
+    dispatcher_manifest: "{{ app_root }}/deploy/dispatcher.yaml"
+    api_manifest: "{{ app_root }}/deploy/remedios-api.yaml"
+    dispatcher_image: "ghcr.io/borisfaj/remedios-dispatcher:latest"
+    api_image: "ghcr.io/borisfaj/remedios-api:latest"
     whisper_cpp_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
     whisper_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
   tasks:
@@ -31,6 +37,40 @@
       run_once: true
       become: false
 
+    - name: Leer ruta de wallet desde .secrets (ORACLE_WALLET_PATH)
+      set_fact:
+        wallet_src: "{{ lookup('ini', 'ORACLE_WALLET_PATH type=properties file=' ~ secrets_src) | default('', true) }}"
+
+    - name: Validar que el wallet existe en el controlador (si se definió)
+      stat:
+        path: "{{ wallet_src }}"
+      register: wallet_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when:
+        - wallet_src | length > 0
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Abortar si la ruta de wallet no existe en el controlador
+      fail:
+        msg: "ORACLE_WALLET_PATH='{{ wallet_src }}' no existe en el controlador. Ajusta la ruta en .secrets a un ZIP válido."
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - not wallet_file.stat.exists
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Abortar si el wallet no es una carpeta (descomprime localmente el zip)
+      fail:
+        msg: "ORACLE_WALLET_PATH debe apuntar a una carpeta (contenido descomprimido del wallet). Ajusta .secrets."
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - wallet_file.stat.exists
+        - not wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
+
     - name: Crear carpetas de trabajo
       file:
         path: "{{ item }}"
@@ -40,6 +80,7 @@
         - "{{ app_root }}"
         - "{{ src_dir }}"
         - "{{ app_root }}/deploy"
+        - "{{ wallet_dir }}"
 
     - name: Sincronizar código de remedios al master
       synchronize:
@@ -50,6 +91,75 @@
           - "--exclude=.venv"
           - "--exclude=__pycache__"
           - "--exclude=.git"
+
+    - name: Copiar manifiesto de dispatcher
+      copy:
+        src: ../deploy/dispatcher.yaml
+        dest: "{{ dispatcher_manifest }}"
+        mode: "0644"
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Copiar .secrets al master
+      copy:
+        src: "{{ secrets_src }}"
+        dest: "{{ app_root }}/.secrets"
+        mode: "0600"
+
+    - name: Renderizar manifiesto de dispatcher con variables de .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        if [ -z "${DOMAIN:-}" ]; then
+          echo "DOMAIN debe estar definido en {{ app_root }}/.secrets" >&2
+          exit 1
+        fi
+        envsubst < {{ dispatcher_manifest }} > /tmp/dispatcher.rendered.yaml
+      args:
+        executable: /bin/bash
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Copiar manifiesto de remedios-api
+      copy:
+        src: ../deploy/remedios-api.yaml
+        dest: "{{ api_manifest }}"
+        mode: "0644"
+      when: (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Copiar network policy de remedios (dispatcher)
+      copy:
+        src: ../deploy/remedios-networkpolicy.yaml
+        dest: "{{ app_root }}/deploy/remedios-networkpolicy.yaml"
+        mode: "0644"
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Aplicar manifiesto de dispatcher
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/dispatcher.rendered.yaml
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Reiniciar deployment dispatcher para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/dispatcher -n remedios
+      register: restart_dispatcher
+      changed_when: "'restarted' in restart_dispatcher.stdout or restart_dispatcher.rc == 0"
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Esperar rollout de dispatcher
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/dispatcher -n remedios
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Aplicar manifiesto de remedios-api
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ api_manifest }}
+      when: (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Reiniciar deployment remedios-api para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remedios-api -n remedios
+      register: restart_remedios_api
+      changed_when: "'restarted' in restart_remedios_api.stdout or restart_remedios_api.rc == 0"
+      when: (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Esperar rollout de remedios-api
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remedios-api -n remedios
+      when: (deploy_remedios_api | default(false) | bool) == true
 
     - name: Copiar manifiesto de remetext
       copy:
@@ -86,11 +196,30 @@
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-turbo -n remedios
       when: (deploy_whisper_turbo | default(false) | bool) == true
 
-    - name: Copiar .secrets al master
-      copy:
-        src: "{{ secrets_src }}"
-        dest: "{{ app_root }}/.secrets"
-        mode: "0600"
+    - name: Sincronizar wallet de Oracle (carpeta ya descomprimida en el controlador)
+      synchronize:
+        src: "{{ wallet_src }}/"
+        dest: "{{ wallet_dir }}/"
+        delete: yes
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - wallet_file.stat.exists
+        - wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Crear/actualizar secret oracle-wallet desde carpeta descomprimida
+      shell: |
+        kubectl --kubeconfig={{ kubeconfig }} create secret generic oracle-wallet \
+          --from-file={{ wallet_dir }}/ \
+          -n remedios \
+          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - wallet_file.stat.exists
+        - wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
 
     - name: Validar credenciales de GHCR en .secrets
       shell: |
@@ -111,13 +240,25 @@
         kubectl --kubeconfig={{ kubeconfig }} create ns remedios
       changed_when: false
 
-    - name: Crear/actualizar secret remedios-secrets desde .secrets
+    - name: Crear/actualizar secret remedios-secrets desde .secrets (sin ORACLE_WALLET_PATH)
       shell: |
+        tmp=$(mktemp)
+        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN)=' {{ app_root }}/.secrets > "$tmp"
+        dsn="{{ oracle_dsn }}"
+        if [ -z "$dsn" ] && [ -f "{{ wallet_dir }}/tnsnames.ora" ]; then
+          dsn=$(awk 'match($0,/^[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*=/,a){print a[1]; exit}' {{ wallet_dir }}/tnsnames.ora)
+        fi
+        if [ -z "$dsn" ]; then
+          echo "No se pudo determinar ORACLE_DSN (define ORACLE_DSN en .secrets o revisa tnsnames.ora)" >&2
+          exit 1
+        fi
+        echo "ORACLE_DSN=$dsn" >> "$tmp"
         kubectl --kubeconfig={{ kubeconfig }} create secret generic remedios-secrets \
-          --from-env-file={{ app_root }}/.secrets \
-          ${whisper_backend:+ --from-literal=WHISPER_BACKEND=${whisper_backend} } \
+          --from-env-file="$tmp" \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+        rm -f "$tmp"
+      when: (deploy_dispatcher | default(false) | bool) or (deploy_remedios_api | default(false) | bool) or (deploy_remetext | default(false) | bool) or (deploy_whisper_turbo | default(false) | bool) or (deploy_whisper_cpp | default(false) | bool)
 
     - name: Crear/actualizar pull secret ghcr-creds para GHCR (si hay credenciales)
       shell: |
@@ -133,6 +274,7 @@
           --docker-password="$GHCR_TOKEN" \
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+
 
     - name: Aplicar manifiesto de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remetext.yaml

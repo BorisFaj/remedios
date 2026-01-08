@@ -1,4 +1,4 @@
-# Remedios
+![Remedios](logo.png)
 
 **Webhook de WhatsApp escalable y ligero, diseñado para Oracle Cloud Always Free (ARM).**
 
@@ -24,17 +24,17 @@ El sistema se compone de varios módulos desacoplados:
     - **Kafka**: Desacopla la recepción de mensajes del procesamiento. El webhook solo encola eventos, garantizando alta disponibilidad y baja latencia de respuesta a Meta.
 
 3.  **Servicios (Microservicios)**:
-    - **Webhook Server** (`zordon/core/server.py`): Recibe webhooks de WhatsApp y los publica en Kafka.
-    - **Remetext** (`remedios`): Servicio de procesamiento de texto.
-    - **Whisper Worker**: Servicio de transcripción de audio optimizado para ARM64 (usando `whisper.cpp` o `whisper-turbo`).
-    - **Whatsapp Consumer**: Orquesta el flujo de mensajes hacia los servicios correspondientes.
+    - **Dispatcher** (`remedios/core/dispatcher`): Recibe webhooks de WhatsApp, registra el mensaje vía API interna y publica en Kafka.
+    - **API interna** (`remedios/core/api`): Persiste estados/resultados y ofrece endpoints internos para envío de respuestas y extracción de audio.
+    - **Remetext** (`remedios/consumers/text`): Procesamiento de texto y respuesta por WhatsApp.
+    - **Whisper Workers** (`remedios/consumers/audio`): Transcripción de audio con `whisper-turbo` o `whisper-cpp`.
 
 ## 📋 Requisitos Previos
 
 1.  **Instancia Oracle Cloud**: Ubuntu 22.04 (ARM64 Ampere).
 2.  **Dominio**: Un dominio público apuntando a la IP pública de tu instancia.
 3.  **Tailscale**: Una cuenta de Tailscale y una Auth Key (reusable y efímera recomendada).
-4.  **GitHub Token**: Un Personal Access Token (Classic) con permiso `read:packages` para descargar las imágenes desde GHCR.
+4.  **Credenciales GHCR (opcional)**: Si las imágenes son privadas, necesitas `GHCR_USERNAME` y `GHCR_TOKEN` con permiso `read:packages`. Si son públicas, no hace falta.
 
 ## 🛠 Instalación (Ansible)
 
@@ -56,10 +56,12 @@ DOMAIN=tu-dominio.com
 WEBHOOK_VERIFY_TOKEN=tu-token-secreto
 TAILSCALE_AUTHKEY=tskey-auth-tu-key
 GHCR_USERNAME=tu-usuario-github
-GHCR_TOKEN=ghp_tu_token_github
+GHCR_TOKEN=tu_token_ghcr
 # Opcional: Configuración de Whisper
 WHISPER_MODEL=ggml-large-v3-turbo-q5_0.bin
 ```
+
+No compartas este archivo.
 
 ### 2. Configurar Inventario
 
@@ -75,7 +77,7 @@ tu-usuario@tu-ip-publica
 
 ### 3. Desplegar Cluster e Infraestructura
 
-Ejecuta el playbook de cluster. Esto instalará k3s, Tailscale, Traefik y Kafka:
+Ejecuta el playbook de cluster. Esto instalará k3s, Tailscale, Traefik y Kafka (solo infraestructura, sin desplegar los servicios de aplicación):
 
 ```bash
 ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
@@ -83,10 +85,11 @@ ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/cluster.yml
 
 ### 4. Desplegar Servicios
 
-Una vez el cluster esté arriba, despliega los servicios de aplicación (Remedios, Whisper, etc.):
+Una vez el cluster esté arriba, despliega los servicios de aplicación (dispatcher, api interna, Remetext, Whisper, etc.):
 
 ```bash
-ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml
+ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml \
+  -e "deploy_dispatcher=true deploy_remedios_api=true deploy_remetext=true deploy_whisper_turbo=true deploy_whisper_cpp=false"
 ```
 
 ## 📈 Escalabilidad (Añadir Nodos)
@@ -102,11 +105,14 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
 
 ## 📂 Estructura del Proyecto
 
-- `remedios/`: Código fuente de la aplicación (lógica de negocio, servicios de texto).
+- `remedios/`: Código fuente de la aplicación (core, API, consumers).
 - `zordon/`: Infraestructura y despliegue.
     - `ansible/`: Playbooks de automatización.
-    - `core/`: Componentes base (Webhook Server, Dockerfiles).
     - `deploy/`: Manifiestos de Kubernetes (YAMLs).
+
+### Logs en Oracle
+- El módulo `remedios/log` persiste usuarios, mensajes y jobs en Oracle usando wallet (Client Credentials).
+- Variables necesarias en `.secrets`: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`). El wallet se monta como secreto en `/opt/oracle/wallet` y el pod exporta `ORACLE_WALLET_PATH=/opt/oracle/wallet`. Opcional: `ORACLE_WALLET_PASSWORD`.
 
 ## 🐛 Debugging y Logs
 
@@ -115,9 +121,14 @@ Ver estado de los pods:
 kubectl -n remedios get pods
 ```
 
-Ver logs del webhook:
+Ver logs del dispatcher:
 ```bash
-kubectl -n remedios logs -l app=remedios -f
+kubectl -n remedios logs -l app=dispatcher -f
+```
+
+Ver logs de la API interna:
+```bash
+kubectl -n remedios logs -l app=remedios-api -f
 ```
 
 Ver logs de Kafka:
