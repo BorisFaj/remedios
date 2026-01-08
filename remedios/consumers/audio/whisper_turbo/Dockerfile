@@ -14,14 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copiar requirements primero para cache
-COPY ${APP_SRC}/requirements.txt ./remedios/
-COPY ${APP_SRC}/consumers/audio/whisper_turbo/requirements.txt ./remedios/requirements_audio.txt
+COPY ${APP_SRC}/consumers/audio/whisper_turbo/requirements.txt ./remedios/consumers/audio/whisper_turbo/requirements.txt
 
 # Crear venv e instalar dependencias en modo CPU
 RUN python3 -m venv $VENV \
     && $VENV/bin/pip install --upgrade pip setuptools \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements_audio.txt \
-    && $VENV/bin/pip install --no-cache-dir -r remedios/requirements.txt
+    && $VENV/bin/pip install --no-cache-dir -r remedios/consumers/audio/whisper_turbo/requirements.txt
 
 # Copiar código
 COPY ${APP_SRC}/ /app/remedios
