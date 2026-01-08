@@ -8,7 +8,7 @@ Remedios es una plataforma de procesamiento de mensajes de WhatsApp que desplieg
 
 ## 🚀 Objetivo del Proyecto
 
-El objetivo principal es permitir el despliegue de un stack completo de procesamiento de IA (Whisper, LLMs, etc.) utilizando recursos gratuitos (Oracle Always Free), sin sacrificar la calidad de la arquitectura.
+El objetivo principal es desplegar un stack de procesamiento de IA en Oracle Always Free para voz y routing de mensajes, manteniendo una arquitectura escalable que permita añadir un nodo GPU cuando se necesite ejecutar un LLM.
 
 - **Coste Cero**: Funciona en instancias ARM (4 OCPUs, 24GB RAM) de la capa gratuita.
 - **Escalabilidad**: Diseño basado en eventos (Kafka) y Kubernetes. Puedes añadir workers fácilmente.
