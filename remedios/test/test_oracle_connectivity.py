@@ -13,10 +13,10 @@ def test_oracle_connectivity():
     assert not missing, f"Faltan variables ORACLE_*: {', '.join(missing)} (define en entorno o en test/.env)"
 
     # Recargar sender tras cargar el entorno para que coja las variables
-    from remedios.log import sender
-    importlib.reload(sender)
+    from remedios.core.api.persistence import storage
+    importlib.reload(storage)
 
-    engine = sender.get_engine()
+    engine = storage.get_engine()
     assert engine is not None, "Engine no inicializado; revisa variables ORACLE_*"
 
     try:

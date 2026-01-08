@@ -6,15 +6,15 @@ import importlib
 def setup_test_db():
     os.environ["ORACLE_USER"] = "TEST"
 
-    from remedios.log import sender
-    importlib.reload(sender)
+    from remedios.core.api.persistence import storage
+    importlib.reload(storage)
 
-    if not sender.engine:
+    if not storage.engine:
         pytest.skip("No se pudo conectar a la base de datos (engine es None). Revisa configuración.")
 
-    sender.Base.metadata.create_all(sender.engine)
+    storage.Base.metadata.create_all(storage.engine)
 
-    yield sender
+    yield storage
 
 def test_validate_user(setup_test_db):
     sender = setup_test_db
@@ -38,7 +38,14 @@ def test_validate_message(setup_test_db):
     
     sender.validate_user(receiver_phone, "Receiver User")
     
-    msg_id = sender.validate_message(sender_phone, receiver_phone, "Hello World", "text")
+    msg_id = sender.validate_message(
+        sender_phone,
+        receiver_phone,
+        "Hello World",
+        "text",
+        "msg-1",
+        "number-1",
+    )
     assert msg_id is not None
     
     session = sender.SessionLocal()
@@ -53,7 +60,14 @@ def test_create_job(setup_test_db):
     # Pre-requisito: mensaje existente
     sender_phone = "123456789"
     receiver_phone = "987654321"
-    msg_id = sender.validate_message(sender_phone, receiver_phone, "Job Message", "text")
+    msg_id = sender.validate_message(
+        sender_phone,
+        receiver_phone,
+        "Job Message",
+        "text",
+        "msg-2",
+        "number-2",
+    )
     
     job_id = sender.create_job("transcribe", msg_id)
     assert job_id is not None
