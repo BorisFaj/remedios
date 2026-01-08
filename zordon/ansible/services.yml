@@ -99,6 +99,26 @@
         mode: "0644"
       when: (deploy_dispatcher | default(false) | bool) == true
 
+    - name: Copiar .secrets al master
+      copy:
+        src: "{{ secrets_src }}"
+        dest: "{{ app_root }}/.secrets"
+        mode: "0600"
+
+    - name: Renderizar manifiesto de dispatcher con variables de .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        if [ -z "${DOMAIN:-}" ]; then
+          echo "DOMAIN debe estar definido en {{ app_root }}/.secrets" >&2
+          exit 1
+        fi
+        envsubst < {{ dispatcher_manifest }} > /tmp/dispatcher.rendered.yaml
+      args:
+        executable: /bin/bash
+      when: (deploy_dispatcher | default(false) | bool) == true
+
     - name: Copiar manifiesto de remedios-api
       copy:
         src: ../deploy/remedios-api.yaml
@@ -114,11 +134,31 @@
       when: (deploy_dispatcher | default(false) | bool) == true
 
     - name: Aplicar manifiesto de dispatcher
-      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ dispatcher_manifest }}
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/dispatcher.rendered.yaml
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Reiniciar deployment dispatcher para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/dispatcher -n remedios
+      register: restart_dispatcher
+      changed_when: "'restarted' in restart_dispatcher.stdout or restart_dispatcher.rc == 0"
+      when: (deploy_dispatcher | default(false) | bool) == true
+
+    - name: Esperar rollout de dispatcher
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/dispatcher -n remedios
       when: (deploy_dispatcher | default(false) | bool) == true
 
     - name: Aplicar manifiesto de remedios-api
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ api_manifest }}
+      when: (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Reiniciar deployment remedios-api para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remedios-api -n remedios
+      register: restart_remedios_api
+      changed_when: "'restarted' in restart_remedios_api.stdout or restart_remedios_api.rc == 0"
+      when: (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Esperar rollout de remedios-api
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remedios-api -n remedios
       when: (deploy_remedios_api | default(false) | bool) == true
 
     - name: Copiar manifiesto de remetext
@@ -156,12 +196,6 @@
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-turbo -n remedios
       when: (deploy_whisper_turbo | default(false) | bool) == true
 
-    - name: Copiar .secrets al master
-      copy:
-        src: "{{ secrets_src }}"
-        dest: "{{ app_root }}/.secrets"
-        mode: "0600"
-
     - name: Sincronizar wallet de Oracle (carpeta ya descomprimida en el controlador)
       synchronize:
         src: "{{ wallet_src }}/"
@@ -169,6 +203,7 @@
         delete: yes
       when:
         - wallet_src | length > 0
+        - wallet_file.stat is defined
         - wallet_file.stat.exists
         - wallet_file.stat.isdir
         - (deploy_remedios_api | default(false) | bool) == true
@@ -181,6 +216,7 @@
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
       when:
         - wallet_src | length > 0
+        - wallet_file.stat is defined
         - wallet_file.stat.exists
         - wallet_file.stat.isdir
         - (deploy_remedios_api | default(false) | bool) == true
@@ -239,37 +275,6 @@
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
 
-    - name: Renderizar manifiesto de remedios con variables de .secrets
-      shell: |
-        set -a
-        . {{ app_root }}/.secrets
-        set +a
-        if [ -z "${DOMAIN:-}" ] || [ -z "${WEBHOOK_VERIFY_TOKEN:-}" ]; then
-          echo "DOMAIN y WEBHOOK_VERIFY_TOKEN deben estar definidos en {{ app_root }}/.secrets" >&2
-          exit 1
-        fi
-        envsubst < {{ remedios_manifest }} > /tmp/remedios.rendered.yaml
-      args:
-        executable: /bin/bash
-      when: (deploy_remedios | default(false) | bool) == true
-
-    - name: Aplicar manifiesto de remedios
-      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/remedios.rendered.yaml
-      when: (deploy_remedios | default(false) | bool) == true
-
-    - name: Aplicar network policy de remedios
-      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remedios-networkpolicy.yaml
-      when: (deploy_remedios | default(false) | bool) == true
-
-    - name: Reiniciar deployment remedios para coger cambios
-      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remedios -n remedios
-      register: restart_remedios
-      changed_when: "'restarted' in restart_remedios.stdout or restart_remedios.rc == 0"
-      when: (deploy_remedios | default(false) | bool) == true
-
-    - name: Esperar rollout de remedios
-      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remedios -n remedios
-      when: (deploy_remedios | default(false) | bool) == true
 
     - name: Aplicar manifiesto de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remetext.yaml

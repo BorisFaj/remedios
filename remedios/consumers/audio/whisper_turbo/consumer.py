@@ -137,7 +137,7 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
         post_internal_api(
             cfg['internal_api_url'],
             cfg['internal_api_token'],
-            "/internal/job_status",
+            "/internal/job_result",
             {
                 "job_id": msg.job_id,
                 "result": {

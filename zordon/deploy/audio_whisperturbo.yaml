@@ -5,7 +5,7 @@ metadata:
   namespace: remedios
 data:
   WHISPER_MODEL: "BorisFaj/whisperL-v3-turbo"
-  INTERNAL_API_URL: "http://remedios-api"
+  INTERNAL_API_URL: "http://remedios-api:3000"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -15,7 +15,7 @@ metadata:
   labels:
     app: whisper-turbo
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: whisper-turbo
@@ -60,8 +60,15 @@ spec:
               - key: app
                 operator: In
                 values:
-                - whisper-cpp
+                - whisper-turbo
             topologyKey: "kubernetes.io/hostname"
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: "kubernetes.io/hostname"
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: whisper-turbo
       nodeSelector:
         kubernetes.io/arch: arm64
 ---

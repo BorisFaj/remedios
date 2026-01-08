@@ -13,7 +13,7 @@ from kafka import KafkaProducer
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.commons.utils import post_internal_api
 from remedios.core.routing import route
-from remedios.whatsapp.handler import (
+from remedios.core.dispatcher.whatsapp_handler import (
     get_audio_metadata,
     get_message,
     get_message_id,
