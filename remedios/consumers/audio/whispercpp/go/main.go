@@ -19,7 +19,6 @@ import (
 	"time"
 
 	whisper "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
-	"github.com/remedios/core/routing"
 	"github.com/segmentio/kafka-go"
 )
 
