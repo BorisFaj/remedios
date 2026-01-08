@@ -1,4 +1,6 @@
-![Remedios](logo.png)
+<p align="center">
+  <img src="logo.png" alt="Remedios logo" width="600"/>
+</p>
 
 **Webhook de WhatsApp escalable y ligero, diseñado para Oracle Cloud Always Free (ARM).**
 
@@ -6,7 +8,7 @@ Remedios es una plataforma de procesamiento de mensajes de WhatsApp que desplieg
 
 ## 🚀 Objetivo del Proyecto
 
-El objetivo principal es permitir el despliegue de un stack completo de procesamiento de IA (Whisper, LLMs, etc.) utilizando recursos gratuitos (Oracle Always Free), sin sacrificar la calidad de la arquitectura.
+El objetivo principal es desplegar un stack de procesamiento de IA en Oracle Always Free para voz y routing de mensajes, manteniendo una arquitectura escalable que permita añadir un nodo GPU cuando se necesite ejecutar un LLM.
 
 - **Coste Cero**: Funciona en instancias ARM (4 OCPUs, 24GB RAM) de la capa gratuita.
 - **Escalabilidad**: Diseño basado en eventos (Kafka) y Kubernetes. Puedes añadir workers fácilmente.
@@ -111,7 +113,7 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
     - `deploy/`: Manifiestos de Kubernetes (YAMLs).
 
 ### Logs en Oracle
-- El módulo `remedios/log` persiste usuarios, mensajes y jobs en Oracle usando wallet (Client Credentials).
+- La capa de persistencia vive en `remedios/core/api/persistence` y la usa la API interna.
 - Variables necesarias en `.secrets`: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`). El wallet se monta como secreto en `/opt/oracle/wallet` y el pod exporta `ORACLE_WALLET_PATH=/opt/oracle/wallet`. Opcional: `ORACLE_WALLET_PASSWORD`.
 
 ## 🐛 Debugging y Logs

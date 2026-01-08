@@ -10,13 +10,14 @@ import importlib
 def test_oracle_connectivity():
     required = ["ORACLE_DSN", "ORACLE_USER", "ORACLE_PASSWORD", "ORACLE_WALLET_PATH"]
     missing = [k for k in required if not os.getenv(k)]
-    assert not missing, f"Faltan variables ORACLE_*: {', '.join(missing)} (define en entorno o en test/.env)"
+    if missing:
+        pytest.skip(f"Faltan variables ORACLE_*: {', '.join(missing)}")
 
     # Recargar sender tras cargar el entorno para que coja las variables
-    from remedios.log import sender
-    importlib.reload(sender)
+    from remedios.core.api.persistence import db
+    importlib.reload(db)
 
-    engine = sender.get_engine()
+    engine = db.get_engine()
     assert engine is not None, "Engine no inicializado; revisa variables ORACLE_*"
 
     try:

@@ -8,7 +8,6 @@ WORKDIR /app
 
 COPY ${APP_SRC}/ /app/${APP_SRC}/
 
-RUN pip install --no-cache-dir -r /app/${APP_SRC}/requirements.txt
 RUN pip install --no-cache-dir -r /app/${APP_SRC}/core/api/requirements.txt
 
 EXPOSE 3000
