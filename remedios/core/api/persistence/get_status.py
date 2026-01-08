@@ -3,7 +3,7 @@ import sys
 
 from sqlalchemy import text
 
-from remedios.core.api.persistence.storage import _create_engine_from_env, get_engine
+from remedios.core.api.persistence.db import _create_engine_from_env, get_engine
 
 # Configuración de logging
 logging.basicConfig(

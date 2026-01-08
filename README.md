@@ -1,4 +1,6 @@
-![Remedios](logo.png)
+<p align="center">
+  <img src="logo.png" alt="Remedios logo" width="600"/>
+</p>
 
 **Webhook de WhatsApp escalable y ligero, diseñado para Oracle Cloud Always Free (ARM).**
 

@@ -6,13 +6,14 @@ import importlib
 def setup_test_db():
     os.environ["ORACLE_USER"] = "TEST"
 
-    from remedios.core.api.persistence import storage
+    from remedios.core.api.persistence import db, storage
+    importlib.reload(db)
     importlib.reload(storage)
 
-    if not storage.engine:
+    if not db.engine:
         pytest.skip("No se pudo conectar a la base de datos (engine es None). Revisa configuración.")
 
-    storage.Base.metadata.create_all(storage.engine)
+    storage.Base.metadata.create_all(db.engine)
 
     yield storage
 

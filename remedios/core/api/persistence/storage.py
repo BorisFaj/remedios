@@ -1,28 +1,12 @@
-import logging
-import os
-import sys
 import json
-import tempfile
-import zipfile
-from pathlib import Path
+import logging
+import sys
 from datetime import datetime
 
-from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Identity,
-    Integer,
-    String,
-    Text,
-    TIMESTAMP,
-    create_engine,
-    text,
-    select
-)
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-
-from .models_base import LogBase
+from .db import _get_session
+from .models import Base, Job, JobResult, Message, User
 
 # Configuración de logging
 logging.basicConfig(
@@ -31,155 +15,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
-
-Base = declarative_base()
-SessionLocal = None
-engine = None
-
-
-def _prepare_wallet_dir(wallet_path: str) -> Path:
-    """Acepta una ruta de carpeta o un zip con el wallet y devuelve la carpeta lista."""
-    path = Path(wallet_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Wallet no encontrado en {wallet_path}")
-    if path.is_dir():
-        return path
-    if path.suffix.lower() == ".zip":
-        target = Path(tempfile.mkdtemp(prefix="wallet_"))
-        with zipfile.ZipFile(path, "r") as zf:
-            zf.extractall(target)
-        return target
-    raise ValueError(f"Ruta de wallet no soportada: {wallet_path}")
-
-
-def _create_engine_from_env():
-    """Construye el engine de SQLAlchemy para Oracle usando el wallet."""
-    required = ["ORACLE_USER", "ORACLE_PASSWORD", "ORACLE_DSN", "ORACLE_WALLET_PATH"]
-    missing = [key for key in required if not os.getenv(key)]
-    if missing:
-        logger.warning("Logging a DB deshabilitado; faltan variables: %s", ", ".join(missing))
-        return None, None
-
-    try:
-        wallet_dir = _prepare_wallet_dir(os.environ["ORACLE_WALLET_PATH"])
-    except Exception as exc:
-        logger.error("No se pudo preparar el wallet: %s", exc)
-        return None, None
-    connect_args = {
-        "config_dir": str(wallet_dir),
-        "wallet_location": str(wallet_dir),
-    }
-    wallet_password = os.getenv("ORACLE_WALLET_PASSWORD")
-    if wallet_password:
-        connect_args["wallet_password"] = wallet_password
-
-    dsn = os.environ["ORACLE_DSN"]  # alias del servicio en tnsnames.ora
-
-    engine = create_engine(
-        "oracle+oracledb://",
-        connect_args={
-            "user": os.environ["ORACLE_USER"],
-            "password": os.environ["ORACLE_PASSWORD"],
-            "dsn": dsn,
-            **connect_args,
-        },
-        pool_pre_ping=True,
-        pool_recycle=3600,
-    )
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    return engine, session_factory
-
-
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, Identity(), primary_key=True)
-    phone = Column(String(20), unique=True, nullable=False)
-    name = Column(String(255))
-    created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
-
-    sent_messages = relationship(
-        "Message",
-        back_populates="sender",
-        foreign_keys="Message.sender_phone",
-    )
-    received_messages = relationship(
-        "Message",
-        back_populates="receiver",
-        foreign_keys="Message.receiver_phone",
-    )
-
-
-class Message(Base):
-    __tablename__ = "messages"
-
-    id = Column(Integer, Identity(), primary_key=True)
-    sender_phone = Column(String(20), ForeignKey("users.phone"))
-    receiver_phone = Column(String(20), ForeignKey("users.phone"))
-    message = Column(Text, nullable=False)
-    message_type = Column(String(50), nullable=False, default="text")
-    created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
-
-    message_id = Column(String(200), unique=True)
-    number_id = Column(String(200))
-
-    sender = relationship("User", foreign_keys=[sender_phone], back_populates="sent_messages")
-    receiver = relationship("User", foreign_keys=[receiver_phone], back_populates="received_messages")
-
-
-class Job(Base):
-    __tablename__ = "jobs"
-
-    id = Column(Integer, Identity(), primary_key=True)
-    job_type = Column(String(50), nullable=False)
-    status = Column(String(20), nullable=False)
-    source_message_id = Column(ForeignKey("messages.id"), nullable=False)
-    user_id = Column(ForeignKey("users.id"))
-    error_message = Column(Text)
-    created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
-    updated_at = Column(TIMESTAMP(timezone=False))
-
-    message = relationship("Message")
-    user = relationship("User")
-    result = relationship("JobResult", uselist=False, back_populates="job")
-
-
-class JobResult(Base):
-    __tablename__ = "job_results"
-
-    job_id = Column(Integer, ForeignKey("jobs.id"), primary_key=True)
-    result_json = Column(Text)
-    output_ref = Column(String(2000))
-    duration_ms = Column(Integer)
-    audio_duration_seconds = Column(Integer)
-    started_at = Column(TIMESTAMP(timezone=False))
-    finished_at = Column(TIMESTAMP(timezone=False))
-    created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
-
-
-    job = relationship("Job", back_populates="result")
-
-
-engine, SessionLocal = _create_engine_from_env()
-if not engine:
-    logger.warning("No se inicializó engine de Oracle; se omite persistencia en DB.")
-
-
-class LogGolismeo(LogBase):
-    def __init__(self, message_queue: [str]):
-        super().__init__(message_queue)
-        self.m_queue = message_queue
-
-
-def _get_session():
-    if not SessionLocal:
-        return None
-    return SessionLocal()
-
-
-def get_engine():
-    return engine
-
 
 def validate_user(phone_number: str, name: str | None = None):
     """Guarda un usuario si no existe; nunca devuelve None (lanza RuntimeError en fallo)."""
