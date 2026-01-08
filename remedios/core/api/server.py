@@ -1,7 +1,10 @@
-from flask import Flask, request, jsonify, abort
+import base64
+import json
+import os
 import sys
 import logging
-import os
+import requests
+from flask import Flask, request, jsonify, abort
 from datetime import datetime, timezone
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.log.sender import (
@@ -12,6 +15,10 @@ from remedios.log.sender import (
     save_job_result,
 )
 from remedios.core.routing import route
+
+GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
+GRAPH_URL = os.environ.get("GRAPH_URL")
+__HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
 
 # logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -26,6 +33,73 @@ INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
 def _check_internal_auth():
     auth = request.headers.get("Authorization", "")
     return auth == f"Bearer {INTERNAL_API_TOKEN}"
+
+
+def _post_graph(url: str, payload: dict) -> requests.Response:
+    """Envia un POST a Graph y loguea cualquier error HTTP o de conexión."""
+    try:
+        resp = requests.post(url, headers=__HEADERS, json=payload, timeout=10)
+        if resp.status_code >= 400:
+            logger.error(
+                "Graph POST %s failed status=%s body=%s", url, resp.status_code, resp.text
+            )
+        return resp
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.error("Graph POST %s failed: %s", url, exc)
+        raise
+
+
+def _send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
+    response_data = {
+        "messaging_product": "whatsapp",
+        "to": phone_number,
+        "text": {"body": text},
+        "context": {"message_id": message_id},
+    }
+
+    _post_graph(f"{GRAPH_URL}/{number_id}/messages", response_data)
+
+    mark_read_data = {
+        "messaging_product": "whatsapp",
+        "status": "read",
+        "message_id": message_id,
+    }
+    _post_graph(f"{GRAPH_URL}/{number_id}/messages", mark_read_data)
+
+
+def send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
+    """Envía una respuesta de texto por WhatsApp."""
+    if not GRAPH_API_TOKEN or not GRAPH_URL:
+        raise RuntimeError("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta")
+
+    _send_text_answer(text, phone_number, message_id, number_id)
+
+
+def extract_audio(audio_id: str) -> bytes:
+    """Descarga el audio desde Graph y devuelve los bytes."""
+    if not GRAPH_API_TOKEN or not GRAPH_URL:
+        raise RuntimeError("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede obtener audio")
+
+    logger.debug("buscando audio %s...", audio_id)
+    response_url = requests.get("{}/{}".format(GRAPH_URL, audio_id), headers=__HEADERS)
+    logger.info("fetch meta URL status=%s", response_url.status_code)
+
+    if response_url.status_code == 200:
+        json_url = json.loads(response_url.content)
+        audio_response = requests.get(json_url["url"], headers=__HEADERS)
+        content = audio_response.content or b""
+        logger.info("audio download status=%s size=%s", audio_response.status_code, len(content))
+        if audio_response.status_code == 200:
+            audio_file = content
+        else:
+            logger.error("Error al descargar el archivo: %s", audio_response.status_code)
+            logger.error(audio_response.text)
+            raise RuntimeError(f"Error al descargar el archivo: {audio_response.status_code}")
+    else:
+        logger.error("URL no recibida :(")
+        raise RuntimeError(f"URL no recibida: status={response_url.status_code}")
+
+    return audio_file
 
 
 @app.before_request
@@ -174,6 +248,64 @@ def internal_job_result():
     if not ok:
         return jsonify({"error": "failed to save job_result"}), 500
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/internal/send_text_answer", methods=["POST"])
+def internal_send_text_answer():
+    if not _check_internal_auth():
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    text = payload.get("text")
+    phone_number = payload.get("phone_number")
+    message_id = payload.get("message_id")
+    number_id = payload.get("number_id")
+
+    missing = [
+        k
+        for k, v in {
+            "text": text,
+            "phone_number": phone_number,
+            "message_id": message_id,
+            "number_id": number_id,
+        }.items()
+        if not v
+    ]
+    if missing:
+        return jsonify({"status": "error", "message": f"Faltan campos: {', '.join(missing)}"}), 400
+
+    try:
+        send_text_answer(text, phone_number, message_id, number_id)
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.exception("Error enviando respuesta a WhatsApp: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/internal/extract_audio", methods=["POST"])
+def internal_extract_audio():
+    if not _check_internal_auth():
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    audio_id = payload.get("audio_id")
+    if not audio_id:
+        return jsonify({"status": "error", "message": "audio_id requerido"}), 400
+
+    try:
+        audio_file = extract_audio(audio_id)
+    except Exception as exc:  # pragma: no cover - red de terceros
+        logger.exception("Error obteniendo audio %s: %s", audio_id, exc)
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+    encoded = base64.b64encode(audio_file).decode("utf-8")
+    return jsonify(
+        {
+            "status": "ok",
+            "audio_id": audio_id,
+            "audio_b64": encoded,
+            "size_bytes": len(audio_file),
+        }
+    )
 
 
 if __name__ == "__main__":

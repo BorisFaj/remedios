@@ -4,8 +4,8 @@ metadata:
   name: remetext-config
   namespace: remedios
 data:
-  KAFKA_TOPIC: "whatsapp-text"
-  KAFKA_GROUP_ID: "remetext"
+  TEXT_TOPIC: "answer_request"
+  GROUP_ID: "whatsapp-text-consumer"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,7 +42,7 @@ spec:
         - name: ORACLE_WALLET_PATH
           value: /opt/oracle/wallet
         - name: INTERNAL_API_URL
-          value: http://remedios-api
+          value: http://remedios-api:3000
         ports:
         - containerPort: 8080
         volumeMounts:

@@ -21,7 +21,6 @@ spec:
         - name: remedios-api
           image: ghcr.io/borisfaj/remedios-api:latest
           imagePullPolicy: Always
-          command: ["/app/remedios/.venv/bin/python", "-m", "remedios.core.api.server"]
           envFrom:
             - secretRef:
                 name: remedios-secrets

@@ -14,7 +14,7 @@ metadata:
   namespace: remedios
 data:
   BOOTSTRAP_SERVER: "kafka.kafka.svc.cluster.local:9092"
-  INTERNAL_API_URL: "http://remedios-api"
+  INTERNAL_API_URL: "http://remedios-api:3000"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -39,7 +39,6 @@ spec:
         - name: dispatcher
           image: ghcr.io/borisfaj/remedios-dispatcher:latest
           imagePullPolicy: Always
-          command: ["/app/remedios/.venv/bin/python", "-m", "remedios.core.dispatcher.producer"]
           envFrom:
             - configMapRef:
                 name: remedios-config
