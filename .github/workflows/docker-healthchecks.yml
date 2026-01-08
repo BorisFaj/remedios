@@ -119,4 +119,4 @@ jobs:
           pip install pytest sqlalchemy
 
       - name: Run unit tests
-        run: pytest -q remedios/test/test_persistence_storage.py
+        run: pytest -q remedios/test/test_persistence_storage.py remedios/test/test_consumers_processing.py

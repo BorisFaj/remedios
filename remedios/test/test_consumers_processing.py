@@ -15,8 +15,6 @@ def _encode_msg(model):
 
 
 def test_text_consumer_updates_job(monkeypatch):
-    status_calls = []
-    save_calls = []
     calls = []
 
     monkeypatch.setattr(text_consumer, "ask", lambda text: "ok")
@@ -31,17 +29,6 @@ def test_text_consumer_updates_job(monkeypatch):
         return FakeResp()
 
     monkeypatch.setattr(text_consumer, "post_internal_api", fake_post_internal)
-    def fake_update(job_id, status, error):
-        status_calls.append((job_id, status, error))
-        return True
-
-    def fake_save(*args, **kwargs):
-        save_calls.append((args, kwargs))
-        return True
-
-    monkeypatch.setattr(text_consumer, "update_job_status", fake_update)
-    monkeypatch.setattr(text_consumer, "save_job_result", fake_save)
-
     msg = TextMessage(
         schema_version=1,
         message_id="m1",
@@ -56,13 +43,15 @@ def test_text_consumer_updates_job(monkeypatch):
     cfg = {"internal_api_url": "http://internal", "internal_api_token": "tok"}
     text_consumer.process_message(_encode_msg(msg), cfg)
 
-    assert ("processing" in {s for _, s, _ in status_calls})
-    assert ("completed" in {s for _, s, _ in status_calls})
-    assert save_calls, "save_job_result no fue llamado"
-    _, kwargs = save_calls[-1]
-    assert kwargs["duration_ms"] >= 0
-    assert kwargs["started_at"] is not None
-    assert kwargs["finished_at"] is not None
+    status_payloads = [p for path, p in calls if path == "/internal/job_status"]
+    assert any(p["status"] == "processing" for p in status_payloads)
+    assert any(p["status"] == "completed" for p in status_payloads)
+    result_payloads = [p for path, p in calls if path == "/internal/job_result"]
+    assert result_payloads, "job_result no fue llamado"
+    latest = result_payloads[-1]
+    assert latest["duration_ms"] >= 0
+    assert latest["started_at"] is not None
+    assert latest["finished_at"] is not None
     assert any(path == "/internal/send_text_answer" for path, _ in calls)
 
 
@@ -111,8 +100,8 @@ def test_audio_consumer_transcribes_and_replies(monkeypatch):
     assert "/internal/extract_audio" in paths
     assert "/internal/send_text_answer" in paths
     # Último call incluye result con duración y transcript
-    result_payloads = [payload for path, payload in calls if path == "/internal/job_status" and "result" in payload]
-    assert result_payloads, "job_status con result no fue enviado"
+    result_payloads = [payload for path, payload in calls if path == "/internal/job_result"]
+    assert result_payloads, "job_result no fue enviado"
     latest = result_payloads[-1]
     assert latest["result"]["transcript"] == "transcripcion"
     assert latest["result"]["response_text"] == "transcripcion"
