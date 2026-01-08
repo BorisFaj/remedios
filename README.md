@@ -113,7 +113,7 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
     - `deploy/`: Manifiestos de Kubernetes (YAMLs).
 
 ### Logs en Oracle
-- El módulo `remedios/log` persiste usuarios, mensajes y jobs en Oracle usando wallet (Client Credentials).
+- La capa de persistencia vive en `remedios/core/api/persistence` y la usa la API interna.
 - Variables necesarias en `.secrets`: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`). El wallet se monta como secreto en `/opt/oracle/wallet` y el pod exporta `ORACLE_WALLET_PATH=/opt/oracle/wallet`. Opcional: `ORACLE_WALLET_PASSWORD`.
 
 ## 🐛 Debugging y Logs
