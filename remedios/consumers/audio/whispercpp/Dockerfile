@@ -2,6 +2,7 @@ FROM debian:bookworm-slim AS builder
 
 ARG APP_SRC=remedios
 ARG GO_VERSION=1.23.2
+ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -15,8 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 
-# Go toolchain
-RUN curl -fsSL https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz -o /tmp/go.tgz \
+# Go toolchain (match build architecture)
+RUN if [ "${TARGETARCH}" = "amd64" ]; then GO_ARCH="amd64"; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then GO_ARCH="arm64"; \
+    else echo "Arquitectura no soportada: ${TARGETARCH}" >&2; exit 1; fi \
+ && curl -fsSL https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz -o /tmp/go.tgz \
  && tar -C /usr/local -xzf /tmp/go.tgz \
  && rm /tmp/go.tgz
 ENV PATH="/usr/local/go/bin:${PATH}"
@@ -62,7 +66,7 @@ COPY --from=builder /usr/local/lib/ /usr/local/lib/
 COPY --from=builder /usr/local/include/ /usr/local/include/
 COPY ${APP_SRC}/consumers/audio/whispercpp/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
-ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH:-}"
 
 WORKDIR /app
 
