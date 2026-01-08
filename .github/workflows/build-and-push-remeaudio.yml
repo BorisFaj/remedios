@@ -1,17 +1,19 @@
-name: Build and Push Remeaudio (develop)
+name: Build and Push Audio Consumers (develop)
 
 on:
   push:
     branches: ["develop"]
     paths:
-      - "remedios/**"
+      - "remedios/consumers/audio/**"
       - "zordon/deploy/audio_whispercpp.yaml"
+      - "zordon/deploy/audio_whisperturbo.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
   pull_request:
     branches: ["develop"]
     paths:
-      - "remedios/**"
+      - "remedios/consumers/audio/**"
       - "zordon/deploy/audio_whispercpp.yaml"
+      - "zordon/deploy/audio_whisperturbo.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
 
 permissions:
@@ -21,9 +23,6 @@ permissions:
 env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
-  IMAGE_NAME: remeaudio-whispercpp
-  DOCKERFILE: ./remedios/apis/audio/whispercpp/Dockerfile
-  CONTEXT: ./
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
   ARCH_TAG_AMD64: amd64-latest
   ARCH_TAG_ARM64: arm64-latest
@@ -31,6 +30,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: whisper-cpp
+            image: whisper-cpp
+            dockerfile: ./remedios/consumers/audio/whispercpp/Dockerfile
+            context: .
+          - name: whisper-turbo
+            image: whisper-turbo
+            dockerfile: ./remedios/consumers/audio/whisper_turbo/Dockerfile
+            context: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,12 +68,12 @@ jobs:
       - name: Build and push (multi-arch)
         uses: docker/build-push-action@v5
         with:
-          context: ${{ env.CONTEXT }}
-          file: ${{ env.DOCKERFILE }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: ${{ env.DO_PUSH == 'true' }}
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:${{ env.ARCH_TAG_AMD64 }}
-            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:${{ env.ARCH_TAG_ARM64 }}
-            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ matrix.image }}:${{ env.ARCH_TAG_AMD64 }}
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ matrix.image }}:${{ env.ARCH_TAG_ARM64 }}
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ matrix.image }}:sha-${{ github.sha }}
           no-cache: true

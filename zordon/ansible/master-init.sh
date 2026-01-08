@@ -188,13 +188,6 @@ sudo k3s kubectl apply -n kube-system -f traefik-acme.yaml
 echo "Aplicando kafka.yaml"
 sudo k3s kubectl apply -f kafka.yaml
 
-# ==== 11. Aplicar remedios.yaml con envsubst ====
-
-echo "Aplicando remedios.yaml con DOMAIN=$DOMAIN"
-envsubst < remedios.yaml > /tmp/remedios.rendered.yaml
-sudo k3s kubectl apply -f /tmp/remedios.rendered.yaml
-
-
 echo "== Setup COMPLETADO =="
 sudo k3s kubectl get nodes -o wide
 sudo k3s kubectl -n remedios get all

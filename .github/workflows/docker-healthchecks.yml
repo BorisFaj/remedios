@@ -21,32 +21,42 @@ jobs:
         include:
           - name: whisper-cpp
             context: .
-            dockerfile: remedios/apis/audio/whispercpp/Dockerfile
+            dockerfile: remedios/consumers/audio/whispercpp/Dockerfile
             port: 8001
             health: /health
-            env: >
-              GRAPH_API_TOKEN=dummy
-              GRAPH_URL=https://example.com
-              WHISPER_MODEL=ggml-tiny.en.bin
-              WHISPER_MODEL_REPO=ggerganov/whisper.cpp
-              WHISPER_FAKE=1
-              WHISPER_BACKEND=cpp
+            env: |
+              HEALTHCHECK_ONLY=1
+              APP_PORT=8001
           - name: whisper-turbo
             context: .
-            dockerfile: remedios/apis/audio/whisper_turbo/Dockerfile
-            port: 8001
+            dockerfile: remedios/consumers/audio/whisper_turbo/Dockerfile
+            port: 8080
             health: /health
-            env: >
-              GRAPH_API_TOKEN=dummy
-              GRAPH_URL=https://example.com
-              WHISPER_MODEL=openai/whisper-tiny
-              WHISPER_BACKEND=turbo
+            env: |
+              HEALTHCHECK_ONLY=1
           - name: remetext
             context: .
-            dockerfile: remedios/apis/text/Dockerfile_text
-            port: 8000
+            dockerfile: remedios/consumers/text/Dockerfile
+            port: 8080
             health: /health
-            env: ""
+            env: |
+              HEALTHCHECK_ONLY=1
+          - name: remedios-api
+            context: .
+            dockerfile: remedios/core/api/Dockerfile
+            port: 3000
+            health: /health
+            env: |
+              INTERNAL_API_TOKEN=dummy
+              GRAPH_API_TOKEN=dummy
+              GRAPH_URL=https://example.com
+          - name: dispatcher
+            context: .
+            dockerfile: remedios/core/dispatcher/Dockerfile
+            port: 3000
+            health: /health
+            env: |
+              HEALTHCHECK_ONLY=1
 
     steps:
       - name: Checkout
@@ -60,15 +70,9 @@ jobs:
 
       - name: Run ${{ matrix.name }}
         run: |
-          env_list=()
-          while IFS= read -r line; do
-            line=$(echo "$line" | xargs)
-            [ -z "$line" ] && continue
-            env_list+=("-e" "$line")
-          done <<< "${{ matrix.env }}"
           docker run -d --name ${{ matrix.name }} \
             -p ${{ matrix.port }}:${{ matrix.port }} \
-            "${env_list[@]}" \
+            --env-file <(printf '%s\n' "${{ matrix.env }}") \
             test-${{ matrix.name }}
 
       - name: Wait for health ${{ matrix.name }}

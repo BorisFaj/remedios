@@ -4,8 +4,8 @@ metadata:
   name: remetext-config
   namespace: remedios
 data:
-  KAFKA_TOPIC: "whatsapp-text"
-  KAFKA_GROUP_ID: "remetext"
+  TEXT_TOPIC: "answer_request"
+  GROUP_ID: "whatsapp-text-consumer"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,7 +30,7 @@ spec:
       - name: remetext
         image: ghcr.io/borisfaj/remetext:latest
         imagePullPolicy: Always
-        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.apis.text.text_service"]
+        command: ["/app/remedios/.venv/bin/python", "-m", "remedios.consumers.text.consumer"]
         envFrom:
         - configMapRef:
             name: remedios-config
@@ -38,8 +38,21 @@ spec:
             name: remetext-config
         - secretRef:
             name: remedios-secrets
+        env:
+        - name: ORACLE_WALLET_PATH
+          value: /opt/oracle/wallet
+        - name: INTERNAL_API_URL
+          value: http://remedios-api:3000
         ports:
-        - containerPort: 8000
+        - containerPort: 8080
+        volumeMounts:
+        - name: oracle-wallet
+          mountPath: /opt/oracle/wallet
+          readOnly: true
+      volumes:
+      - name: oracle-wallet
+        secret:
+          secretName: oracle-wallet
 ---
 apiVersion: v1
 kind: Service
@@ -50,5 +63,5 @@ spec:
   selector:
     app: remetext
   ports:
-  - port: 8000
-    targetPort: 8000
+  - port: 8080
+    targetPort: 8080

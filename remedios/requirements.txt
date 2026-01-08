@@ -1,0 +1,6 @@
+sqlalchemy
+requests
+Flask
+oracledb
+pydantic
+kafka-python

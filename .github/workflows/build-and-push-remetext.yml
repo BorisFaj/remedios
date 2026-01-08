@@ -22,7 +22,7 @@ env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
   IMAGE_NAME: remetext
-  DOCKERFILE: ./remedios/apis/text/Dockerfile_text
+  DOCKERFILE: ./remedios/consumers/text/Dockerfile
   CONTEXT: ./
   DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 

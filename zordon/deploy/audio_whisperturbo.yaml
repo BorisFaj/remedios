@@ -4,9 +4,8 @@ metadata:
   name: whisper-turbo-config
   namespace: remedios
 data:
-  KAFKA_TOPIC: "whatsapp-audio"
-  KAFKA_GROUP_ID: "whatsapp-audio-turbo"
   WHISPER_MODEL: "BorisFaj/whisperL-v3-turbo"
+  INTERNAL_API_URL: "http://remedios-api:3000"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -16,7 +15,7 @@ metadata:
   labels:
     app: whisper-turbo
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: whisper-turbo
@@ -45,13 +44,31 @@ spec:
             name: remedios-secrets
         ports:
         - containerPort: 8001
+        volumeMounts:
         resources:
           requests:
             cpu: "500m"
             memory: "2Gi"
           limits:
-            cpu: "2000m"
+            cpu: "1"
             memory: "6Gi"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - whisper-turbo
+            topologyKey: "kubernetes.io/hostname"
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: "kubernetes.io/hostname"
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: whisper-turbo
       nodeSelector:
         kubernetes.io/arch: arm64
 ---

@@ -11,10 +11,12 @@ if [ ! -f .secrets ]; then
 fi
 
 # ==== 1. Cargar variables ====
-
+# Evitamos que 'set -u' reviente si hay vars opcionales no definidas en .secrets
+set +u
 set -a
 . .secrets
 set +a
+set -u
 
 if [ -z "${TAILSCALE_AUTHKEY:-}" ]; then
   echo "ERROR: TAILSCALE_AUTHKEY vacío en .secrets"
