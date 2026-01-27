@@ -39,6 +39,8 @@ def transcribe(file_name) -> Tuple[str, float | None]:
     """Devuelve (texto, duracion_s|None) usando los timestamps del pipeline."""
     pipe = _get_pipeline()
 
+    import torch
+
     with torch.inference_mode():
         result = pipe(file_name, return_timestamps=True, generate_kwargs={"language": "spanish"})
 
