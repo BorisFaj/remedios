@@ -8,8 +8,6 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .models import Base
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
