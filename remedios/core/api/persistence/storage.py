@@ -3,10 +3,9 @@ import logging
 import sys
 from datetime import datetime
 
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from .db import _get_session
-from .models import Base, Job, JobResult, Message, User
+from .models import Job, JobResult, Message, User
 
 # Configuración de logging
 logging.basicConfig(
