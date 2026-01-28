@@ -1,3 +1,5 @@
+import random
+
 frases_motivacionales = [
     "Cada día es una nueva oportunidad.",
     "Lo único imposible es aquello que no intentas.",
@@ -40,8 +42,6 @@ frases_motivacionales = [
     "El verdadero fracaso es no intentarlo.",
     "Aprovecha cada segundo, porque el tiempo no vuelve."
 ]
-
-import random
 
 def ask(m: str):
     return random.choice(frases_motivacionales)
