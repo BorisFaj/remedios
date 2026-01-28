@@ -2,6 +2,9 @@ import functools
 import os
 from typing import Tuple
 
+import torch
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+
 _whisper_model_id = os.getenv("WHISPER_MODEL", "BorisFaj/whisperL-v3-turbo")
 
 
@@ -9,9 +12,6 @@ _whisper_model_id = os.getenv("WHISPER_MODEL", "BorisFaj/whisperL-v3-turbo")
 def _get_pipeline():
     """Carga perezosa del modelo/pipeline para evitar descargas en import."""
     import warnings
-
-    import torch
-    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
     if torch.cuda.is_available():
         device = "cuda:0"
