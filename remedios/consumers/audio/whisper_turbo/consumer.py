@@ -21,7 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("whisper-turbo-consumer")
 
 _UPLOAD_WORKERS = int(os.environ.get("UPLOAD_AUDIO_WORKERS", "2"))
-_UPLOAD_POOL = ThreadPoolExecutor(max_workers=_UPLOAD_WORKERS) if _UPLOAD_WORKERS > 0 else None
+_UPLOAD_POOL = (
+    ThreadPoolExecutor(max_workers=_UPLOAD_WORKERS) if _UPLOAD_WORKERS > 0 else None
+)
+
 
 def start_health_server(port: int = 8080):
     class Handler(BaseHTTPRequestHandler):
@@ -74,6 +77,7 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
         max_poll_interval_ms=600000,
         max_poll_records=1,
     )
+
 
 def _fetch_audio_bytes(msg: AudioMessage, cfg: Dict[str, str]) -> bytes:
     """Descarga el audio vía API interna y lo devuelve en bytes."""
@@ -159,7 +163,9 @@ def _upload_audio_async(audio_bytes: bytes, msg: AudioMessage, cfg: Dict[str, st
                 timeout=cfg["upload_timeout"],
             )
             if resp.status_code >= 300:
-                logger.error("Upload OCI failed status=%s body=%s", resp.status_code, resp.text)
+                logger.error(
+                    "Upload OCI failed status=%s body=%s", resp.status_code, resp.text
+                )
                 return
             etag = resp.headers.get("etag")
             if etag:
@@ -185,6 +191,7 @@ def _upload_audio_async(audio_bytes: bytes, msg: AudioMessage, cfg: Dict[str, st
 
     _UPLOAD_POOL.submit(_do_upload)
 
+
 def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
         base = IncomingMessage.model_validate_json(raw)
@@ -198,7 +205,12 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
         started = time.time()
         started_at = datetime.now(timezone.utc)
-        post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], api_route["job_status"], {"job_id": msg.job_id, "status": "processing"})
+        post_internal_api(
+            cfg["internal_api_url"],
+            cfg["internal_api_token"],
+            api_route["job_status"],
+            {"job_id": msg.job_id, "status": "processing"},
+        )
 
         audio_bytes = _fetch_audio_bytes(msg, cfg)
         _upload_audio_async(audio_bytes, msg, cfg)
@@ -210,12 +222,16 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
         duration_ms = int((time.time() - started) * 1000)
         finished_at = datetime.now(timezone.utc)
 
-        post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], api_route["job_status"],
-                          {"job_id": msg.job_id, "status": "completed"})
+        post_internal_api(
+            cfg["internal_api_url"],
+            cfg["internal_api_token"],
+            api_route["job_status"],
+            {"job_id": msg.job_id, "status": "completed"},
+        )
 
         post_internal_api(
-            cfg['internal_api_url'],
-            cfg['internal_api_token'],
+            cfg["internal_api_url"],
+            cfg["internal_api_token"],
             api_route["job_result"],
             {
                 "job_id": msg.job_id,
@@ -234,10 +250,16 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
         return True
     except Exception as exc:
         try:
-            post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], api_route["job_status"],
-                              {"job_id": msg.job_id, "status": "failed", "error_message": str(exc)})
+            post_internal_api(
+                cfg["internal_api_url"],
+                cfg["internal_api_token"],
+                api_route["job_status"],
+                {"job_id": msg.job_id, "status": "failed", "error_message": str(exc)},
+            )
         except Exception:
-            logger.exception("Error notificando estado failed a API interna job_id=%s", msg.job_id)
+            logger.exception(
+                "Error notificando estado failed a API interna job_id=%s", msg.job_id
+            )
         logger.exception("Error procesando job_id=%s", msg.job_id)
         return False
 
@@ -265,7 +287,9 @@ def main():
         try:
             ok = process_message(record.value, cfg)
         except InvalidMessageError as e:
-            logger.exception("Mensaje inválido topic=%s offset=%s", record.topic, record.offset)
+            logger.exception(
+                "Mensaje inválido topic=%s offset=%s", record.topic, record.offset
+            )
 
             payload = {
                 "error": str(e),

@@ -1,11 +1,11 @@
 """init schema
 
 Revision ID: 20260129_0001
-Revises: 
+Revises:
 Create Date: 2026-01-29
 """
-from alembic import op
 
+from alembic import op
 
 revision = "20260129_0001"
 down_revision = None
@@ -19,8 +19,7 @@ def _exec(sql: str) -> None:
 
 def upgrade():
     # Users
-    _exec(
-        """
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE TABLE REMEDIOS.users (
             id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -32,12 +31,10 @@ def upgrade():
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
+        """)
 
     # Messages
-    _exec(
-        """
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE TABLE REMEDIOS.messages (
             id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -57,12 +54,10 @@ def upgrade():
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
+        """)
 
     # Jobs
-    _exec(
-        """
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE TABLE REMEDIOS.jobs (
             id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -84,12 +79,10 @@ def upgrade():
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
+        """)
 
     # Job results
-    _exec(
-        """
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE TABLE REMEDIOS.job_results (
             job_id        NUMBER PRIMARY KEY,
@@ -108,12 +101,10 @@ def upgrade():
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
+        """)
 
     # Job audio (1:1)
-    _exec(
-        """
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE TABLE REMEDIOS.job_audio (
             job_id      NUMBER PRIMARY KEY,
@@ -134,90 +125,73 @@ def upgrade():
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
+        """)
 
     # Indexes
-    _exec(
-        """
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE INDEX REMEDIOS.idx_messages_sender ON REMEDIOS.messages(sender_phone)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE INDEX REMEDIOS.idx_messages_receiver ON REMEDIOS.messages(receiver_phone)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE INDEX REMEDIOS.idx_jobs_user_id ON REMEDIOS.jobs(user_id)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE INDEX REMEDIOS.idx_jobs_status ON REMEDIOS.jobs(status)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE INDEX REMEDIOS.idx_jobs_message ON REMEDIOS.jobs(source_message_id)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX REMEDIOS.ux_messages_message_id ON REMEDIOS.messages(message_id)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE INDEX REMEDIOS.idx_messages_number_id ON REMEDIOS.messages(number_id)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
-    _exec(
-        """
+        """)
+    _exec("""
         BEGIN
           EXECUTE IMMEDIATE 'CREATE UNIQUE INDEX REMEDIOS.ux_jobs_msg_type ON REMEDIOS.jobs(source_message_id, job_type)';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE != -955 THEN RAISE; END IF;
         END;
-        """
-    )
+        """)
 
 
 def downgrade():

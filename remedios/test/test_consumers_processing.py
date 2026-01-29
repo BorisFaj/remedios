@@ -71,7 +71,9 @@ def test_audio_consumer_transcribes_and_replies(monkeypatch):
         return FakeResp({"status": "ok"})
 
     monkeypatch.setattr(turbo_consumer, "post_internal_api", fake_post_internal)
-    monkeypatch.setattr(turbo_consumer, "transcribe", lambda audio: ("transcripcion", 4.0))
+    monkeypatch.setattr(
+        turbo_consumer, "transcribe", lambda audio: ("transcripcion", 4.0)
+    )
 
     msg = AudioMessage(
         schema_version=1,
@@ -96,7 +98,9 @@ def test_audio_consumer_transcribes_and_replies(monkeypatch):
     assert "/internal/extract_audio" in paths
     assert "/internal/send_text_answer" in paths
     # Último call incluye result con duración y transcript
-    result_payloads = [payload for path, payload in calls if path == "/internal/job_result"]
+    result_payloads = [
+        payload for path, payload in calls if path == "/internal/job_result"
+    ]
     assert result_payloads, "job_result no fue enviado"
     latest = result_payloads[-1]
     assert latest["result"]["transcript"] == "transcripcion"

@@ -21,7 +21,6 @@ from remedios.core.dispatcher.whatsapp_handler import (
     get_phone_number,
 )
 
-
 # logs
 sys.stdout.reconfigure(line_buffering=True)
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -36,11 +35,17 @@ HEALTHCHECK_ONLY = os.environ.get("HEALTHCHECK_ONLY") == "1"
 producer = None
 if not HEALTHCHECK_ONLY:
     if not bootstrap:
-        raise RuntimeError("BOOTSTRAP_SERVER es obligatorio para inicializar el productor Kafka")
+        raise RuntimeError(
+            "BOOTSTRAP_SERVER es obligatorio para inicializar el productor Kafka"
+        )
     if not INTERNAL_API_URL:
-        raise RuntimeError("INTERNAL_API_URL es obligatorio para contactar la API interna")
+        raise RuntimeError(
+            "INTERNAL_API_URL es obligatorio para contactar la API interna"
+        )
     if not INTERNAL_API_TOKEN:
-        raise RuntimeError("INTERNAL_API_TOKEN es obligatorio para contactar la API interna")
+        raise RuntimeError(
+            "INTERNAL_API_TOKEN es obligatorio para contactar la API interna"
+        )
 
     INTERNAL_API_URL = INTERNAL_API_URL.rstrip("/")
 
@@ -49,7 +54,8 @@ if not HEALTHCHECK_ONLY:
         security_protocol="PLAINTEXT",
         partitioner=lambda key, all_parts, avail_parts, _c=count(): (
             (avail_parts or all_parts)[next(_c) % len(avail_parts or all_parts)]
-            if (avail_parts or all_parts) else None
+            if (avail_parts or all_parts)
+            else None
         ),
     )
 hostname = str.encode(socket.gethostname())
@@ -64,7 +70,7 @@ def on_success(metadata):
 
 
 def on_error(e):
-  app.logger.info(f"❌ Error enviando mensaje a Kafka: {e}")
+    app.logger.info(f"❌ Error enviando mensaje a Kafka: {e}")
 
 
 def verificar_webhook():
@@ -77,7 +83,12 @@ def verificar_webhook():
             app.logger.info("✅ Webhook verificado correctamente")
             return challenge, 200
         else:
-            return jsonify({"status": "error", "message": "Token de verificación inválido"}), 403
+            return (
+                jsonify(
+                    {"status": "error", "message": "Token de verificación inválido"}
+                ),
+                403,
+            )
     return jsonify({"status": "error", "message": "Parámetros faltantes"}), 400
 
 
@@ -99,6 +110,7 @@ def get_topic(data):
     message_type = message.get("type", "text")
 
     return kafka_route.get(message_type, "answer_request")
+
 
 def dispatch_message(data):
     _value = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
@@ -130,7 +142,10 @@ def dispatch_message(data):
 
     return job_id
 
-def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessage | AudioMessage:
+
+def build_message(
+    content, phone, msg_id, number_id, job_id, topic
+) -> TextMessage | AudioMessage:
     base_args = {
         "phone": phone,
         "message_id": msg_id,
@@ -148,10 +163,7 @@ def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessa
             mime_type=content["mime_type"],
         )
     else:
-        return TextMessage(
-            **base_args,
-            text=str(content)
-        )
+        return TextMessage(**base_args, text=str(content))
 
 
 def _create_job(content, phone, topic, number_id, msg_id):
@@ -162,16 +174,22 @@ def _create_job(content, phone, topic, number_id, msg_id):
         "message_id": msg_id,
         "content": content,
     }
-    resp = post_internal_api(INTERNAL_API_URL, INTERNAL_API_TOKEN, "/internal/log_message", payload)
+    resp = post_internal_api(
+        INTERNAL_API_URL, INTERNAL_API_TOKEN, "/internal/log_message", payload
+    )
     try:
         data = resp.json() or {}
     except ValueError as exc:
-        raise RuntimeError("Respuesta no JSON de API interna al registrar mensaje") from exc
+        raise RuntimeError(
+            "Respuesta no JSON de API interna al registrar mensaje"
+        ) from exc
 
     job_id = data.get("job_id")
     if not job_id:
         raise RuntimeError("API interna no devolvió job_id")
     return job_id
+
+
 def send_to_kafka(msg, topic):
     """Encola el mensaje en Kafka."""
     if not producer:
@@ -195,7 +213,10 @@ def webhook():
     elif request.method == "POST":
         try:
             if request.content_type != "application/json":
-                return jsonify({"status": "error", "message": "Unsupported Media Type"}), 415
+                return (
+                    jsonify({"status": "error", "message": "Unsupported Media Type"}),
+                    415,
+                )
 
             data = request.get_json(silent=True)
             if not data:
@@ -223,6 +244,7 @@ def cerrar_kafka_producer():
     """Cierra el Kafka Producer al finalizar el programa."""
     app.logger.info("🔴 Cerrando Kafka Producer...")
     producer.close()
+
 
 atexit.register(cerrar_kafka_producer)
 

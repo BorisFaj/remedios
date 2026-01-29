@@ -2,6 +2,7 @@ import os
 import pytest
 from pathlib import Path
 
+
 @pytest.fixture(scope="session", autouse=True)
 def load_test_env():
     """Carga automáticamente las variables de .env para todos los tests."""

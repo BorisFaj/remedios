@@ -1,4 +1,13 @@
-from sqlalchemy import Column, ForeignKey, Identity, Integer, String, Text, TIMESTAMP, text
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Identity,
+    Integer,
+    String,
+    Text,
+    TIMESTAMP,
+    text,
+)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -37,8 +46,12 @@ class Message(Base):
     message_id = Column(String(200), unique=True)
     number_id = Column(String(200))
 
-    sender = relationship("User", foreign_keys=[sender_phone], back_populates="sent_messages")
-    receiver = relationship("User", foreign_keys=[receiver_phone], back_populates="received_messages")
+    sender = relationship(
+        "User", foreign_keys=[sender_phone], back_populates="sent_messages"
+    )
+    receiver = relationship(
+        "User", foreign_keys=[receiver_phone], back_populates="received_messages"
+    )
 
 
 class Job(Base):
