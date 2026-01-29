@@ -3,5 +3,6 @@ requests
 gunicorn
 python-dotenv
 sqlalchemy
+alembic
 oracledb
 pydantic

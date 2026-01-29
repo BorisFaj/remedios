@@ -1,0 +1,76 @@
+Project remedios {
+  database_type: "Oracle"
+}
+
+Table users {
+  id number [pk, increment]
+  phone varchar(20) [not null, unique]
+  name varchar(255)
+  created_at timestamp
+}
+
+Table messages {
+  id number [pk, increment]
+  sender_phone varchar(20)
+  receiver_phone varchar(20)
+  message_id varchar(200) [unique]
+  number_id varchar(200)
+  message text [not null]
+  message_type varchar(50) [not null, default: "text"]
+  created_at timestamp
+
+  Indexes {
+    (sender_phone) [name: "idx_messages_sender"]
+    (receiver_phone) [name: "idx_messages_receiver"]
+    (number_id) [name: "idx_messages_number_id"]
+  }
+}
+
+Table jobs {
+  id number [pk, increment]
+  job_type varchar(50) [not null]
+  status varchar(20) [not null]
+  source_message_id number [not null]
+  user_id number
+  error_message text
+  created_at timestamp
+  updated_at timestamp
+
+  Indexes {
+    (user_id) [name: "idx_jobs_user_id"]
+    (status) [name: "idx_jobs_status"]
+    (source_message_id) [name: "idx_jobs_message"]
+    (source_message_id, job_type) [name: "ux_jobs_msg_type", unique]
+  }
+}
+
+Table job_results {
+  job_id number [pk]
+  result_json text
+  output_ref varchar(2000)
+  duration_ms number
+  audio_duration_seconds number
+  started_at timestamp
+  finished_at timestamp
+  created_at timestamp
+}
+
+Table job_audio {
+  job_id number [pk]
+  provider varchar(50) [not null]
+  bucket_name varchar(255) [not null]
+  namespace varchar(255) [not null]
+  object_key varchar(2000) [not null]
+  size_bytes number
+  content_type varchar(255)
+  etag varchar(255)
+  audio_id varchar(200)
+  created_at timestamp
+}
+
+Ref: messages.sender_phone > users.phone
+Ref: messages.receiver_phone > users.phone
+Ref: jobs.source_message_id > messages.id
+Ref: jobs.user_id > users.id
+Ref: job_results.job_id > jobs.id
+Ref: job_audio.job_id > jobs.id

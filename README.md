@@ -116,6 +116,19 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
 - La capa de persistencia vive en `remedios/core/api/persistence` y la usa la API interna.
 - Variables necesarias en `.secrets`: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`). El wallet se monta como secreto en `/opt/oracle/wallet` y el pod exporta `ORACLE_WALLET_PATH=/opt/oracle/wallet`. Opcional: `ORACLE_WALLET_PASSWORD`.
 
+### Migraciones (Alembic)
+Usa el script para cargar variables de `zordon/.secrets` y ejecutar Alembic con el wallet local:
+
+```bash
+./scripts/alembic-oracle.sh stamp head
+./scripts/alembic-oracle.sh upgrade head
+```
+
+Para crear nuevas migraciones (revisa el SQL generado):
+```bash
+./scripts/alembic-oracle.sh revision -m "descripcion" --autogenerate
+```
+
 ## 🐛 Debugging y Logs
 
 Ver estado de los pods:
