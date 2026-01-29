@@ -81,3 +81,28 @@ def test_save_job_result(sqlite_session):
         duration_ms=10,
     )
     assert ok is True
+
+
+def test_save_job_audio(sqlite_session):
+    storage.validate_user("123456789", "Test User")
+    msg_id = storage.validate_message(
+        sender="123456789",
+        receiver=None,
+        message="Hola",
+        message_type="text",
+        message_id="msg-4",
+        number_id="num-4",
+    )
+    job_id = storage.create_job("text", msg_id)
+    ok = storage.save_job_audio(
+        job_id,
+        provider="oracle",
+        bucket_name="bucket-a",
+        namespace="ns-a",
+        object_key="audio/job-4.ogg",
+        size_bytes=123,
+        content_type="audio/ogg",
+        etag="etag-1",
+        audio_id="audio-id-4",
+    )
+    assert ok is True

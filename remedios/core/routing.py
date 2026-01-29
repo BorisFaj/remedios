@@ -8,5 +8,7 @@ kafka_route = \
 api_route = \
     {
         "job_status": "/internal/job_status",
-        "job_result": "/internal/job_result"
+        "job_result": "/internal/job_result",
+        "job_audio": "/internal/job_audio",
+        "audio_upload_url": "/internal/audio_upload_url"
     }

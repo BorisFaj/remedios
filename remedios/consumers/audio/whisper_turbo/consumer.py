@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -13,10 +14,14 @@ from pydantic import ValidationError
 from remedios.core.routing import kafka_route, api_route
 from remedios.commons.schemas import IncomingMessage, AudioMessage, InvalidMessageError
 from remedios.commons.utils import post_internal_api
+import requests
 from .stt import transcribe
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("whisper-turbo-consumer")
+
+_UPLOAD_WORKERS = int(os.environ.get("UPLOAD_AUDIO_WORKERS", "2"))
+_UPLOAD_POOL = ThreadPoolExecutor(max_workers=_UPLOAD_WORKERS) if _UPLOAD_WORKERS > 0 else None
 
 def start_health_server(port: int = 8080):
     class Handler(BaseHTTPRequestHandler):
@@ -53,6 +58,8 @@ def load_config() -> Dict[str, str]:
         "group_id": os.environ.get("GROUP_ID", "whatsapp-audio-consumer"),
         "internal_api_url": os.environ["INTERNAL_API_URL"].rstrip("/"),
         "internal_api_token": os.environ["INTERNAL_API_TOKEN"],
+        "upload_audio": os.environ.get("UPLOAD_AUDIO_ENABLED", "0") == "1",
+        "upload_timeout": int(os.environ.get("UPLOAD_AUDIO_TIMEOUT", "30")),
     }
 
 
@@ -107,6 +114,77 @@ def _send_text_answer(msg: AudioMessage, text: str, cfg: Dict[str, str]):
         },
     )
 
+
+def _request_upload_url(msg: AudioMessage, cfg: Dict[str, str]) -> dict:
+    resp = post_internal_api(
+        cfg["internal_api_url"],
+        cfg["internal_api_token"],
+        api_route["audio_upload_url"],
+        {
+            "job_id": msg.job_id,
+            "audio_id": msg.audio_id,
+            "mime_type": msg.mime_type,
+        },
+    )
+    data = resp.json() or {}
+    if data.get("status") != "ok":
+        raise RuntimeError(data.get("error") or "No se pudo obtener upload_url")
+    return data
+
+
+def _upload_audio_async(audio_bytes: bytes, msg: AudioMessage, cfg: Dict[str, str]):
+    if not cfg.get("upload_audio"):
+        return
+    if not _UPLOAD_POOL:
+        logger.warning("UPLOAD_AUDIO_WORKERS=0, upload deshabilitado")
+        return
+
+    try:
+        info = _request_upload_url(msg, cfg)
+    except Exception:
+        logger.exception("No se pudo obtener upload_url job_id=%s", msg.job_id)
+        return
+
+    upload_url = info["upload_url"]
+    bucket_name = info.get("bucket_name")
+    namespace = info.get("namespace")
+    object_key = info.get("object_key")
+
+    def _do_upload():
+        try:
+            resp = requests.put(
+                upload_url,
+                data=audio_bytes,
+                headers={"Content-Type": msg.mime_type or "application/octet-stream"},
+                timeout=cfg["upload_timeout"],
+            )
+            if resp.status_code >= 300:
+                logger.error("Upload OCI failed status=%s body=%s", resp.status_code, resp.text)
+                return
+            etag = resp.headers.get("etag")
+            if etag:
+                etag = etag.strip('"')
+            post_internal_api(
+                cfg["internal_api_url"],
+                cfg["internal_api_token"],
+                api_route["job_audio"],
+                {
+                    "job_id": msg.job_id,
+                    "provider": "oracle",
+                    "bucket_name": bucket_name,
+                    "namespace": namespace,
+                    "object_key": object_key,
+                    "size_bytes": len(audio_bytes),
+                    "content_type": msg.mime_type,
+                    "etag": etag,
+                    "audio_id": msg.audio_id,
+                },
+            )
+        except Exception:
+            logger.exception("Error subiendo audio job_id=%s", msg.job_id)
+
+    _UPLOAD_POOL.submit(_do_upload)
+
 def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
     try:
         base = IncomingMessage.model_validate_json(raw)
@@ -123,6 +201,7 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
         post_internal_api(cfg['internal_api_url'], cfg['internal_api_token'], api_route["job_status"], {"job_id": msg.job_id, "status": "processing"})
 
         audio_bytes = _fetch_audio_bytes(msg, cfg)
+        _upload_audio_async(audio_bytes, msg, cfg)
         transcript, duration = transcribe(audio_bytes)
         transcript = transcript.strip() if transcript else ""
         final_response = transcript or "No pude entender tu audio."
