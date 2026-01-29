@@ -12,18 +12,15 @@ class IncomingMessage(BaseModel):
     message_type: Literal["text", "audio"]
     timestamp: datetime
 
-
 class TextMessage(IncomingMessage):
     message_type: Literal["text"] = "text"
     text: str
 
-
 class AudioMessage(IncomingMessage):
     message_type: Literal["audio"] = "audio"
-    audio_id: str  # id del media en el proveedor
-    mime_type: str  # audio/ogg, audio/mp4, etc.
+    audio_id: str                   # id del media en el proveedor
+    mime_type: str                  # audio/ogg, audio/mp4, etc.
     duration_seconds: Optional[int] = None
-
 
 class InvalidMessageError(Exception):
     pass

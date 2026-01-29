@@ -15,14 +15,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 def validate_user(phone_number: str, name: str | None = None):
     """Guarda un usuario si no existe; nunca devuelve None (lanza RuntimeError en fallo)."""
     session = _get_session()
     if not session:
-        raise RuntimeError(
-            "Sesión de base de datos no inicializada (revisa ORACLE_* y wallet)"
-        )
+        raise RuntimeError("Sesión de base de datos no inicializada (revisa ORACLE_* y wallet)")
     try:
         user = session.query(User).filter_by(phone=phone_number).first()
         if not user:
@@ -42,14 +39,8 @@ def validate_user(phone_number: str, name: str | None = None):
         session.close()
 
 
-def validate_message(
-    sender: str,
-    receiver: str | None,
-    message: str,
-    message_type: str,
-    message_id: str,
-    number_id: str,
-) -> int | None:
+def validate_message(sender: str, receiver: str | None, message: str, message_type: str, message_id: str,
+                     number_id: str) -> int | None:
     """Guarda un mensaje en la base de datos y devuelve su id."""
     session = _get_session()
     if not session:
@@ -66,9 +57,7 @@ def validate_message(
         )
         session.add(new_message)
         session.commit()
-        logger.info(
-            "📩 Mensaje tipo %s registrado con id=%s ✅", message_type, new_message.id
-        )
+        logger.info("📩 Mensaje tipo %s registrado con id=%s ✅", message_type, new_message.id)
         return new_message.id
     except SQLAlchemyError as exc:
         session.rollback()
@@ -78,11 +67,8 @@ def validate_message(
         session.close()
 
 
-def create_job(
-    job_type: str,
-    source_message_id: int,
-    user_id: int | None = None,
-) -> int | None:
+
+def create_job(job_type: str, source_message_id: int, user_id: int | None = None,) -> int | None:
     """Crea un job asociado a un mensaje y devuelve su id."""
     session = _get_session()
     if not session:
@@ -101,17 +87,13 @@ def create_job(
         return job.id
     except SQLAlchemyError as exc:
         session.rollback()
-        logger.error(
-            "❌ Error al crear job para message_id=%s: %s", source_message_id, exc
-        )
+        logger.error("❌ Error al crear job para message_id=%s: %s", source_message_id, exc)
         return None
     finally:
         session.close()
 
 
-def update_job_status(
-    job_id: int, status: str, error_message: str | None = None
-) -> bool:
+def update_job_status(job_id: int, status: str, error_message: str | None = None) -> bool:
     """Actualiza el estado de un job existente."""
     session = _get_session()
     if not session:
@@ -134,15 +116,9 @@ def update_job_status(
         session.close()
 
 
-def save_job_result(
-    job_id: int,
-    result: str | dict,
-    output_ref: str | None = None,
-    duration_ms: int | None = None,
-    started_at: datetime | None = None,
-    finished_at: datetime | None = None,
-    audio_duration_seconds: float | None = None,
-) -> bool:
+def save_job_result(job_id: int, result: str | dict, output_ref: str | None = None,
+                    duration_ms: int | None = None, started_at: datetime | None = None,
+                    finished_at: datetime | None = None, audio_duration_seconds: float | None = None) -> bool:
     """Guarda el resultado de un job (sobrescribe si ya existe)."""
     session = _get_session()
     if not session:

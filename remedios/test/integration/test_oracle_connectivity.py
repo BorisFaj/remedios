@@ -15,7 +15,6 @@ def test_oracle_connectivity():
 
     # Recargar sender tras cargar el entorno para que coja las variables
     from remedios.core.api.persistence import db
-
     importlib.reload(db)
 
     engine = db.get_engine()

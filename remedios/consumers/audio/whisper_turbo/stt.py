@@ -19,9 +19,7 @@ def _get_pipeline():
     else:
         device = "cpu"
         torch_dtype = torch.float32
-        warnings.warn(
-            "⚠️ No se encontró una GPU disponible. Ejecutando en CPU, esto será más lento."
-        )
+        warnings.warn("⚠️ No se encontró una GPU disponible. Ejecutando en CPU, esto será más lento.")
 
     whisper_model = AutoModelForSpeechSeq2Seq.from_pretrained(
         _whisper_model_id, torch_dtype=torch_dtype, use_safetensors=True
@@ -42,9 +40,7 @@ def transcribe(file_name) -> Tuple[str, float | None]:
     pipe = _get_pipeline()
 
     with torch.inference_mode():
-        result = pipe(
-            file_name, return_timestamps=True, generate_kwargs={"language": "spanish"}
-        )
+        result = pipe(file_name, return_timestamps=True, generate_kwargs={"language": "spanish"})
 
     text = result.get("text", "") or ""
     duration = None

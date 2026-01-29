@@ -17,7 +17,6 @@ from remedios.commons.utils import post_internal_api
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("text-consumer")
 
-
 def start_health_server(port: int = 8080):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -63,10 +62,8 @@ def build_consumer(cfg: Dict[str, str]) -> KafkaConsumer:
         group_id=cfg["group_id"],
         enable_auto_commit=False,
         auto_offset_reset="latest",
-        value_deserializer=None,
+        value_deserializer=None
     )
-
-
 def _send_text_answer(msg: TextMessage, text: str, cfg: Dict[str, str]):
     post_internal_api(
         cfg["internal_api_url"],
@@ -164,9 +161,7 @@ def main():
             process_message(record.value, cfg)
             consumer.commit()
         except InvalidMessageError as e:
-            logger.exception(
-                "Mensaje inválido topic=%s offset=%s", record.topic, record.offset
-            )
+            logger.exception("Mensaje inválido topic=%s offset=%s", record.topic, record.offset)
 
             payload = {
                 "error": str(e),
@@ -180,9 +175,7 @@ def main():
             dlq_producer.flush()
             consumer.commit()
         except Exception as _:
-            logger.exception(
-                "Fallo procesando topic=%s offset=%s", record.topic, record.offset
-            )
+            logger.exception("Fallo procesando topic=%s offset=%s", record.topic, record.offset)
 
 
 if __name__ == "__main__":

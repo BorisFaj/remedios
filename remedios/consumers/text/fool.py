@@ -40,9 +40,8 @@ frases_motivacionales = [
     "Nunca subestimes tu capacidad de mejorar.",
     "Lo que piensas, lo creas.",
     "El verdadero fracaso es no intentarlo.",
-    "Aprovecha cada segundo, porque el tiempo no vuelve.",
+    "Aprovecha cada segundo, porque el tiempo no vuelve."
 ]
-
 
 def ask(m: str):
     return random.choice(frases_motivacionales)

@@ -33,9 +33,7 @@ logger = logging.getLogger()
 app = Flask(__name__)
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
 OCI_BUCKET_NAME = os.environ.get("OCI_BUCKET_NAME")
-OCI_BUCKET_NAMESPACE = os.environ.get("OCI_BUCKET_NAMESPACE") or os.environ.get(
-    "OCI_NAMESPACE"
-)
+OCI_BUCKET_NAMESPACE = os.environ.get("OCI_BUCKET_NAMESPACE") or os.environ.get("OCI_NAMESPACE")
 OCI_BUCKET_PREFIX = os.environ.get("OCI_BUCKET_PREFIX", "whatsapp")
 OCI_PAR_TTL_MINUTES = int(os.environ.get("OCI_PAR_TTL_MINUTES", "60"))
 OCI_USE_INSTANCE_PRINCIPALS = os.environ.get("OCI_USE_INSTANCE_PRINCIPALS") == "1"
@@ -55,10 +53,7 @@ def _post_graph(url: str, payload: dict) -> requests.Response:
         resp = requests.post(url, headers=__HEADERS, json=payload, timeout=10)
         if resp.status_code >= 400:
             logger.error(
-                "Graph POST %s failed status=%s body=%s",
-                url,
-                resp.status_code,
-                resp.text,
+                "Graph POST %s failed status=%s body=%s", url, resp.status_code, resp.text
             )
         return resp
     except Exception as exc:  # pragma: no cover - red de terceros
@@ -123,9 +118,7 @@ def _send_text_answer(text: str, phone_number: str, message_id: str, number_id: 
 def send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
     """Envía una respuesta de texto por WhatsApp."""
     if not GRAPH_API_TOKEN or not GRAPH_URL:
-        raise RuntimeError(
-            "GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta"
-        )
+        raise RuntimeError("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede enviar respuesta")
 
     _send_text_answer(text, phone_number, message_id, number_id)
 
@@ -133,9 +126,7 @@ def send_text_answer(text: str, phone_number: str, message_id: str, number_id: s
 def extract_audio(audio_id: str) -> bytes:
     """Descarga el audio desde Graph y devuelve los bytes."""
     if not GRAPH_API_TOKEN or not GRAPH_URL:
-        raise RuntimeError(
-            "GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede obtener audio"
-        )
+        raise RuntimeError("GRAPH_API_TOKEN o GRAPH_URL no definidos, no se puede obtener audio")
 
     logger.debug("buscando audio %s...", audio_id)
     response_url = requests.get("{}/{}".format(GRAPH_URL, audio_id), headers=__HEADERS)
@@ -145,19 +136,13 @@ def extract_audio(audio_id: str) -> bytes:
         json_url = json.loads(response_url.content)
         audio_response = requests.get(json_url["url"], headers=__HEADERS)
         content = audio_response.content or b""
-        logger.info(
-            "audio download status=%s size=%s", audio_response.status_code, len(content)
-        )
+        logger.info("audio download status=%s size=%s", audio_response.status_code, len(content))
         if audio_response.status_code == 200:
             audio_file = content
         else:
-            logger.error(
-                "Error al descargar el archivo: %s", audio_response.status_code
-            )
+            logger.error("Error al descargar el archivo: %s", audio_response.status_code)
             logger.error(audio_response.text)
-            raise RuntimeError(
-                f"Error al descargar el archivo: {audio_response.status_code}"
-            )
+            raise RuntimeError(f"Error al descargar el archivo: {audio_response.status_code}")
     else:
         logger.error("URL no recibida :(")
         raise RuntimeError(f"URL no recibida: status={response_url.status_code}")
@@ -173,7 +158,6 @@ def _protect_internal_paths():
             return abort(403)
         if not _check_internal_auth():
             return abort(401)
-
 
 def log_db(content_or_meta, phone, topic, number_id, msg_id):
     """
@@ -191,14 +175,9 @@ def log_db(content_or_meta, phone, topic, number_id, msg_id):
     if not isinstance(msg_content, str):
         msg_content = str(msg_content)
 
-    message_id = validate_message(
-        sender=phone,
-        receiver=None,
-        message=msg_content,
-        message_type=topic,
-        message_id=msg_id,
-        number_id=number_id,
-    )
+    message_id = validate_message(sender=phone, receiver=None, message=msg_content, message_type=topic,
+                                  message_id=msg_id,
+                                  number_id=number_id)
 
     if message_id is None:
         raise RuntimeError("No se pudo registrar el mensaje en la base de datos")
@@ -211,9 +190,7 @@ def log_db(content_or_meta, phone, topic, number_id, msg_id):
     return job_id
 
 
-def build_message(
-    content, phone, msg_id, number_id, job_id, topic
-) -> TextMessage | AudioMessage:
+def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessage | AudioMessage:
     base_args = {
         "phone": phone,
         "message_id": msg_id,
@@ -231,7 +208,10 @@ def build_message(
             mime_type=content["mime_type"],
         )
     else:
-        return TextMessage(**base_args, text=str(content))
+        return TextMessage(
+            **base_args,
+            text=str(content)
+        )
 
 
 @app.route("/health", methods=["GET"])
@@ -250,20 +230,9 @@ def internal_log_message():
     message_id = payload.get("message_id")
     content = payload.get("content")
 
-    missing = [
-        k
-        for k, v in {"topic": topic, "phone": phone, "message_id": message_id}.items()
-        if not v
-    ]
+    missing = [k for k, v in {"topic": topic, "phone": phone, "message_id": message_id}.items() if not v]
     if missing:
-        return (
-            jsonify(
-                {
-                    "error": f"topic, phone y message_id son requeridos; faltan: {', '.join(missing)}"
-                }
-            ),
-            400,
-        )
+        return jsonify({"error": f"topic, phone y message_id son requeridos; faltan: {', '.join(missing)}"}), 400
 
     try:
         job_id = log_db(content, phone, topic, number_id, message_id)
@@ -414,20 +383,17 @@ def internal_audio_upload_url():
         logger.exception("Error creando PAR para job_id=%s", job_id)
         return jsonify({"error": str(exc)}), 500
 
-    return (
-        jsonify(
-            {
-                "status": "ok",
-                "provider": "oracle",
-                "bucket_name": OCI_BUCKET_NAME,
-                "namespace": OCI_BUCKET_NAMESPACE,
-                "object_key": object_key,
-                "upload_url": upload_url,
-                "expires_at": expires_at.isoformat(),
-            }
-        ),
-        200,
-    )
+    return jsonify(
+        {
+            "status": "ok",
+            "provider": "oracle",
+            "bucket_name": OCI_BUCKET_NAME,
+            "namespace": OCI_BUCKET_NAMESPACE,
+            "object_key": object_key,
+            "upload_url": upload_url,
+            "expires_at": expires_at.isoformat(),
+        }
+    ), 200
 
 
 @app.route("/internal/send_text_answer", methods=["POST"])
@@ -451,12 +417,7 @@ def internal_send_text_answer():
         if not v
     ]
     if missing:
-        return (
-            jsonify(
-                {"status": "error", "message": f"Faltan campos: {', '.join(missing)}"}
-            ),
-            400,
-        )
+        return jsonify({"status": "error", "message": f"Faltan campos: {', '.join(missing)}"}), 400
 
     try:
         send_text_answer(text, phone_number, message_id, number_id)

@@ -39,9 +39,7 @@ def _create_engine_from_env():
     required = ["ORACLE_USER", "ORACLE_PASSWORD", "ORACLE_DSN", "ORACLE_WALLET_PATH"]
     missing = [key for key in required if not os.getenv(key)]
     if missing:
-        logger.warning(
-            "Logging a DB deshabilitado; faltan variables: %s", ", ".join(missing)
-        )
+        logger.warning("Logging a DB deshabilitado; faltan variables: %s", ", ".join(missing))
         return None, None
 
     try:

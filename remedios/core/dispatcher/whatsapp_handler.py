@@ -5,9 +5,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.StreamHandler(
-            sys.stdout
-        )  # Enviar logs a stdout para que Docker los capture
+        logging.StreamHandler(sys.stdout)  # Enviar logs a stdout para que Docker los capture
     ],
 )
 
@@ -18,22 +16,33 @@ logger = logging.getLogger()
 
 def get_audio_metadata(request: dict) -> dict:
     """Extrae metadatos (id, mime_type) del mensaje de audio."""
-    value = request.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
+    value = (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
     messages = value.get("messages", [])
     if not isinstance(messages, list) or not messages:
         raise ValueError(f"Mensaje no encontrado: {value}")
 
     message = messages[0] or {}
     audio_data = message.get("audio", {})
-
+    
     if not isinstance(audio_data, dict):
-        raise ValueError(f"Mensaje no contiene audio válido: {message}")
+       raise ValueError(f"Mensaje no contiene audio válido: {message}")
 
-    return {"audio_id": audio_data.get("id"), "mime_type": audio_data.get("mime_type")}
+    return {
+        "audio_id": audio_data.get("id"),
+        "mime_type": audio_data.get("mime_type")
+    }
 
 
 def get_message_id(request: dict) -> str:
-    value = request.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
+    value = (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
     messages = value.get("messages", [])
     if not isinstance(messages, list) or not messages:
         raise ValueError(f"Mensaje no encontrado: {value}")
@@ -44,10 +53,13 @@ def get_message_id(request: dict) -> str:
     except Exception as _:
         raise ValueError(f"Mensaje id no encontrado: {message}")
 
-
 def get_message(request: dict) -> str:
     """Devuelve el texto del primer mensaje; si no hay texto, levanta ValueError."""
-    value = request.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
+    value = (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
     messages = value.get("messages", [])
     if not isinstance(messages, list) or not messages:
         return ""
@@ -61,7 +73,11 @@ def get_message(request: dict) -> str:
 
 
 def get_phone_number(request: dict) -> str:
-    value = request.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
+    value = (
+        request.get("entry", [{}])[0]
+        .get("changes", [{}])[0]
+        .get("value", {})
+    )
     # Remitente real del mensaje (WA ID del usuario)
     messages = value.get("messages", [])
     if isinstance(messages, list) and messages:
@@ -81,7 +97,6 @@ def get_number_id(request: dict) -> str | None:
         .get("metadata", {})
         .get("phone_number_id")
     )
-
 
 # def send_audio_answer(message: dict, phone_number) -> None:
 #     # Transcribir audio
