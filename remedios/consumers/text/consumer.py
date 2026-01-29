@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict
 from kafka import KafkaConsumer, KafkaProducer
 from pydantic import ValidationError
-from remedios.core.routing import route
+from remedios.core.routing import kafka_route, api_route
 from remedios.consumers.text.fool import ask
 from remedios.commons.schemas import IncomingMessage, TextMessage, InvalidMessageError
 from remedios.commons.utils import post_internal_api
@@ -47,8 +47,8 @@ def load_config() -> Dict[str, str]:
 
     return {
         "bootstrap": os.environ["BOOTSTRAP_SERVER"],
-        "text_topic": os.environ.get("TEXT_TOPIC", route["text"]),
-        "dlq_topic": os.environ.get("DLQ_TOPIC", route["dlq"]),
+        "text_topic": os.environ.get("TEXT_TOPIC", kafka_route["text"]),
+        "dlq_topic": os.environ.get("DLQ_TOPIC", kafka_route["dlq"]),
         "group_id": os.environ.get("GROUP_ID", "whatsapp-text-consumer"),
         "internal_api_url": os.environ["INTERNAL_API_URL"].rstrip("/"),
         "internal_api_token": os.environ["INTERNAL_API_TOKEN"],
@@ -95,7 +95,7 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
             post_internal_api(
                 cfg["internal_api_url"],
                 cfg["internal_api_token"],
-                "/internal/job_status",
+                api_route["job_status"],
                 {"job_id": msg.job_id, "status": "processing"},
             )
 
@@ -108,14 +108,14 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
             post_internal_api(
                 cfg["internal_api_url"],
                 cfg["internal_api_token"],
-                "/internal/job_status",
+                api_route["job_status"],
                 {"job_id": msg.job_id, "status": "completed"},
             )
 
             post_internal_api(
                 cfg["internal_api_url"],
                 cfg["internal_api_token"],
-                "/internal/job_result",
+                api_route["job_result"],
                 {
                     "job_id": msg.job_id,
                     "result": {"answer": result, "input": msg.text},
@@ -129,7 +129,7 @@ def process_message(raw: bytes, cfg: Dict[str, str]) -> bool:
             post_internal_api(
                 cfg["internal_api_url"],
                 cfg["internal_api_token"],
-                "/internal/job_status",
+                api_route["job_status"],
                 {"job_id": msg.job_id, "status": "failed", "error_message": str(exc)},
             )
             raise exc

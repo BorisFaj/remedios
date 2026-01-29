@@ -14,7 +14,7 @@ from remedios.core.api.persistence.storage import (
     update_job_status,
     save_job_result,
 )
-from remedios.core.routing import route
+from remedios.core.routing import kafka_route, api_route
 
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
@@ -152,7 +152,7 @@ def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessa
         "timestamp": datetime.now(timezone.utc),
     }
 
-    if topic == route["audio"]:
+    if topic == kafka_route["audio"]:
         # content es dict con audio_id, mime_type
         return AudioMessage(
             **base_args,
@@ -195,7 +195,7 @@ def internal_log_message():
     return jsonify({"status": "ok", "job_id": job_id}), 200
 
 
-@app.route("/internal/job_status", methods=["POST"])
+@app.route(api_route["job_status"], methods=["POST"])
 def internal_job_status():
     if not _check_internal_auth():
         abort(401)
@@ -211,7 +211,7 @@ def internal_job_status():
     return jsonify({"status": "ok"}), 200
 
 
-@app.route("/internal/job_result", methods=["POST"])
+@app.route(api_route["job_result"], methods=["POST"])
 def internal_job_result():
     if not _check_internal_auth():
         abort(401)
