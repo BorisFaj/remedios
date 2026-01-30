@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlalchemy.exc import SQLAlchemyError
 from .db import _get_session
-from .models import Job, JobResult, Message, User
+from .models import Job, JobAudio, JobResult, Message, User
 
 # Configuración de logging
 logging.basicConfig(
@@ -149,6 +149,55 @@ def save_job_result(job_id: int, result: str | dict, output_ref: str | None = No
     except SQLAlchemyError as exc:
         session.rollback()
         logger.error("❌ Error al guardar job_result %s: %s", job_id, exc)
+        return False
+    finally:
+        session.close()
+
+
+def save_job_audio(
+    job_id: int,
+    provider: str,
+    bucket_name: str,
+    namespace: str,
+    object_key: str,
+    size_bytes: int | None = None,
+    content_type: str | None = None,
+    etag: str | None = None,
+    audio_id: str | None = None,
+) -> bool:
+    """Guarda metadata del audio asociado a un job (sobrescribe si ya existe)."""
+    session = _get_session()
+    if not session:
+        return False
+    try:
+        existing = session.get(JobAudio, job_id)
+        if existing:
+            existing.provider = provider
+            existing.bucket_name = bucket_name
+            existing.namespace = namespace
+            existing.object_key = object_key
+            existing.size_bytes = size_bytes
+            existing.content_type = content_type
+            existing.etag = etag
+            existing.audio_id = audio_id
+        else:
+            ja = JobAudio(
+                job_id=job_id,
+                provider=provider,
+                bucket_name=bucket_name,
+                namespace=namespace,
+                object_key=object_key,
+                size_bytes=size_bytes,
+                content_type=content_type,
+                etag=etag,
+                audio_id=audio_id,
+            )
+            session.add(ja)
+        session.commit()
+        return True
+    except SQLAlchemyError as exc:
+        session.rollback()
+        logger.error("❌ Error al guardar job_audio %s: %s", job_id, exc)
         return False
     finally:
         session.close()

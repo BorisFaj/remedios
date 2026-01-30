@@ -12,7 +12,7 @@ from kafka import KafkaProducer
 
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.commons.utils import post_internal_api
-from remedios.core.routing import route
+from remedios.core.routing import kafka_route
 from remedios.core.dispatcher.whatsapp_handler import (
     get_audio_metadata,
     get_message,
@@ -98,7 +98,7 @@ def get_topic(data):
 
     message_type = message.get("type", "text")
 
-    return route.get(message_type, "answer_request")
+    return kafka_route.get(message_type, "answer_request")
 
 def dispatch_message(data):
     _value = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {})
@@ -114,7 +114,7 @@ def dispatch_message(data):
     topic = get_topic(data)
 
     content = None
-    if topic == route["audio"]:
+    if topic == kafka_route["audio"]:
         content = get_audio_metadata(data)
     else:
         content = get_message(data)
@@ -140,7 +140,7 @@ def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessa
         "timestamp": datetime.now(timezone.utc),
     }
 
-    if topic == route["audio"]:
+    if topic == kafka_route["audio"]:
         # content es dict con audio_id, mime_type
         return AudioMessage(
             **base_args,
