@@ -396,3 +396,8 @@ zordon/ansible/inventory.ini
 .idea/inspectionProfiles/profiles_settings.xml
 /models/
 tmp/*
+
+# Sensitive local artifacts
+Wallet_golismeos/
+Wallet_golismeos.zip
+.vscode/
