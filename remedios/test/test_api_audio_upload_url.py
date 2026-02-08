@@ -1,5 +1,6 @@
 import sys
 import types
+from urllib.parse import urlparse
 
 # ruff: noqa: E402
 import pytest
@@ -66,7 +67,9 @@ def test_audio_upload_url_returns_par(client):
     data = resp.get_json()
     assert data["status"] == "ok"
     assert data["object_key"] == "whatsapp/123/audio-1.ogg"
-    assert data["upload_url"].startswith("https://objectstorage.test")
+    parsed_url = urlparse(data["upload_url"])
+    assert parsed_url.scheme == "https"
+    assert parsed_url.netloc == "objectstorage.test"
 
 
 def test_audio_upload_url_missing_fields(client):

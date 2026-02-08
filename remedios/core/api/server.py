@@ -381,7 +381,7 @@ def internal_audio_upload_url():
         upload_url = f"{client.base_client.endpoint}{access_uri}"
     except Exception as exc:
         logger.exception("Error creando PAR para job_id=%s", job_id)
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": "Ocurrió un error interno al generar el enlace de carga."}), 500
 
     return jsonify(
         {
