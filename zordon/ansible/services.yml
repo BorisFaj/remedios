@@ -41,6 +41,11 @@
       set_fact:
         wallet_src: "{{ lookup('ini', 'ORACLE_WALLET_PATH type=properties file=' ~ secrets_src) | default('', true) }}"
 
+    - name: Leer rutas OCI desde .secrets (OCI_CONFIG_PATH, OCI_API_KEY_PATH)
+      set_fact:
+        oci_config_src: "{{ lookup('ini', 'OCI_CONFIG_PATH type=properties file=' ~ secrets_src) | default('', true) }}"
+        oci_key_src: "{{ lookup('ini', 'OCI_API_KEY_PATH type=properties file=' ~ secrets_src) | default('', true) }}"
+
     - name: Validar que el wallet existe en el controlador (si se definió)
       stat:
         path: "{{ wallet_src }}"
@@ -71,6 +76,38 @@
         - not wallet_file.stat.isdir
         - (deploy_remedios_api | default(false) | bool) == true
 
+    - name: Validar que existe OCI config en el controlador (si se definió)
+      stat:
+        path: "{{ oci_config_src }}"
+      register: oci_config_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when:
+        - oci_config_src | length > 0
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Validar que existe OCI key en el controlador (si se definió)
+      stat:
+        path: "{{ oci_key_src }}"
+      register: oci_key_file
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when:
+        - oci_key_src | length > 0
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Abortar si falta OCI config o key
+      fail:
+        msg: "OCI_CONFIG_PATH y OCI_API_KEY_PATH deben existir en el controlador. Ajusta .secrets."
+      when:
+        - (deploy_remedios_api | default(false) | bool) == true
+        - >
+          (oci_config_src | length == 0) or (oci_key_src | length == 0) or
+          (oci_config_file.stat is defined and not oci_config_file.stat.exists) or
+          (oci_key_file.stat is defined and not oci_key_file.stat.exists)
+
     - name: Crear carpetas de trabajo
       file:
         path: "{{ item }}"
@@ -81,6 +118,7 @@
         - "{{ src_dir }}"
         - "{{ app_root }}/deploy"
         - "{{ wallet_dir }}"
+        - "{{ app_root }}/oci"
 
     - name: Sincronizar código de remedios al master
       synchronize:
@@ -125,6 +163,85 @@
         dest: "{{ api_manifest }}"
         mode: "0644"
       when: (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Sincronizar wallet de Oracle (carpeta ya descomprimida en el controlador)
+      synchronize:
+        src: "{{ wallet_src }}/"
+        dest: "{{ wallet_dir }}/"
+        delete: yes
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - wallet_file.stat.exists
+        - wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Crear/actualizar secret oracle-wallet desde carpeta descomprimida
+      shell: |
+        kubectl --kubeconfig={{ kubeconfig }} create secret generic oracle-wallet \
+          --from-file={{ wallet_dir }}/ \
+          -n remedios \
+          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+      when:
+        - wallet_src | length > 0
+        - wallet_file.stat is defined
+        - wallet_file.stat.exists
+        - wallet_file.stat.isdir
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Copiar OCI config al master
+      copy:
+        src: "{{ oci_config_src }}"
+        dest: "{{ app_root }}/oci/config"
+        mode: "0600"
+      when:
+        - oci_config_src | length > 0
+        - oci_config_file.stat is defined
+        - oci_config_file.stat.exists
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Copiar OCI API key al master
+      copy:
+        src: "{{ oci_key_src }}"
+        dest: "{{ app_root }}/oci/oci_api_key.pem"
+        mode: "0600"
+      when:
+        - oci_key_src | length > 0
+        - oci_key_file.stat is defined
+        - oci_key_file.stat.exists
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Crear/actualizar secret oci-config (config + key)
+      shell: |
+        tmpdir=$(mktemp -d)
+        cp {{ app_root }}/oci/config "$tmpdir/config"
+        sed -E -i 's#^key_file[[:space:]]*=.*#key_file=/opt/oci/oci_api_key.pem#' "$tmpdir/config"
+        if ! grep -q '^key_file' "$tmpdir/config"; then
+          echo "key_file=/opt/oci/oci_api_key.pem" >> "$tmpdir/config"
+        fi
+        kubectl --kubeconfig={{ kubeconfig }} create secret generic oci-config \
+          --from-file=config="$tmpdir/config" \
+          --from-file=oci_api_key.pem={{ app_root }}/oci/oci_api_key.pem \
+          -n remedios \
+          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
+        rm -rf "$tmpdir"
+      when:
+        - oci_config_src | length > 0
+        - oci_key_src | length > 0
+        - oci_config_file.stat is defined
+        - oci_config_file.stat.exists
+        - oci_key_file.stat is defined
+        - oci_key_file.stat.exists
+        - (deploy_remedios_api | default(false) | bool) == true
+
+    - name: Verificar secret oci-config en namespace remedios
+      shell: |
+        kubectl --kubeconfig={{ kubeconfig }} get secret oci-config -n remedios >/dev/null 2>&1
+      register: oci_secret_check
+      changed_when: false
+      failed_when: oci_secret_check.rc != 0
+      when: (deploy_remedios_api | default(false) | bool) == true
+
 
     - name: Copiar network policy de remedios (dispatcher)
       copy:
@@ -196,31 +313,6 @@
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-turbo -n remedios
       when: (deploy_whisper_turbo | default(false) | bool) == true
 
-    - name: Sincronizar wallet de Oracle (carpeta ya descomprimida en el controlador)
-      synchronize:
-        src: "{{ wallet_src }}/"
-        dest: "{{ wallet_dir }}/"
-        delete: yes
-      when:
-        - wallet_src | length > 0
-        - wallet_file.stat is defined
-        - wallet_file.stat.exists
-        - wallet_file.stat.isdir
-        - (deploy_remedios_api | default(false) | bool) == true
-
-    - name: Crear/actualizar secret oracle-wallet desde carpeta descomprimida
-      shell: |
-        kubectl --kubeconfig={{ kubeconfig }} create secret generic oracle-wallet \
-          --from-file={{ wallet_dir }}/ \
-          -n remedios \
-          --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
-      when:
-        - wallet_src | length > 0
-        - wallet_file.stat is defined
-        - wallet_file.stat.exists
-        - wallet_file.stat.isdir
-        - (deploy_remedios_api | default(false) | bool) == true
-
     - name: Validar credenciales de GHCR en .secrets
       shell: |
         set -a
@@ -243,7 +335,7 @@
     - name: Crear/actualizar secret remedios-secrets desde .secrets (sin ORACLE_WALLET_PATH)
       shell: |
         tmp=$(mktemp)
-        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN)=' {{ app_root }}/.secrets > "$tmp"
+        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN|OCI_CONFIG_PATH|OCI_API_KEY_PATH)=' {{ app_root }}/.secrets > "$tmp"
         dsn="{{ oracle_dsn }}"
         if [ -z "$dsn" ] && [ -f "{{ wallet_dir }}/tnsnames.ora" ]; then
           dsn=$(awk 'match($0,/^[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*=/,a){print a[1]; exit}' {{ wallet_dir }}/tnsnames.ora)

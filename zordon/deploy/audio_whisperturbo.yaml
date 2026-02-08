@@ -35,6 +35,12 @@ spec:
           value: "8001"
         - name: WHISPER_BACKEND
           value: "turbo"
+        - name: UPLOAD_AUDIO_ENABLED
+          value: "1"
+        - name: UPLOAD_AUDIO_WORKERS
+          value: "2"
+        - name: UPLOAD_AUDIO_TIMEOUT
+          value: "30"
         envFrom:
         - configMapRef:
             name: remedios-config

@@ -56,6 +56,7 @@ class Job(Base):
     message = relationship("Message")
     user = relationship("User")
     result = relationship("JobResult", uselist=False, back_populates="job")
+    audio = relationship("JobAudio", uselist=False, back_populates="job")
 
 
 class JobResult(Base):
@@ -71,3 +72,20 @@ class JobResult(Base):
     created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
 
     job = relationship("Job", back_populates="result")
+
+
+class JobAudio(Base):
+    __tablename__ = "job_audio"
+
+    job_id = Column(Integer, ForeignKey("jobs.id"), primary_key=True)
+    provider = Column(String(50), nullable=False)
+    bucket_name = Column(String(255), nullable=False)
+    namespace = Column(String(255), nullable=False)
+    object_key = Column(String(2000), nullable=False)
+    size_bytes = Column(Integer)
+    content_type = Column(String(255))
+    etag = Column(String(255))
+    audio_id = Column(String(200))
+    created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
+
+    job = relationship("Job", back_populates="audio")

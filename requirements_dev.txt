@@ -1,0 +1,16 @@
+flask
+requests
+gunicorn
+python-dotenv
+sqlalchemy
+alembic
+oracledb
+oci
+pydantic
+kafka-python
+pytest
+ruff
+transformers~=4.49.0
+accelerate==0.27.2
+ffmpeg-python~=0.2.0
+torch

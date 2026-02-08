@@ -33,10 +33,74 @@ El sistema se compone de varios módulos desacoplados:
 
 ## 📋 Requisitos Previos
 
-1.  **Instancia Oracle Cloud**: Ubuntu 22.04 (ARM64 Ampere).
+1.  **Instancias Oracle Cloud**: Ubuntu 22.04 (ARM64 Ampere) para el/los nodos del cluster.
 2.  **Dominio**: Un dominio público apuntando a la IP pública de tu instancia.
-3.  **Tailscale**: Una cuenta de Tailscale y una Auth Key (reusable y efímera recomendada).
-4.  **Credenciales GHCR (opcional)**: Si las imágenes son privadas, necesitas `GHCR_USERNAME` y `GHCR_TOKEN` con permiso `read:packages`. Si son públicas, no hace falta.
+3.  **Tailscale**: Cuenta de Tailscale y una Auth Key (reusable y efímera recomendada).
+4.  **Oracle Autonomous DB**: Un Autonomous Database activo (región y endpoint conocidos).
+5.  **Oracle Object Storage**: Un bucket existente (namespace, nombre y permisos IAM).
+6.  **Credenciales GHCR (opcional)**: Si las imágenes son privadas, necesitas `GHCR_USERNAME` y `GHCR_TOKEN` con permiso `read:packages`. Si son públicas, no hace falta.
+
+## ✅ Pasos Previos (desde cero)
+
+### 1) Nodos y red
+- Crea una instancia ARM64 (o varias) en OCI con Ubuntu 22.04.
+- Asegura salida a internet y acceso al puerto 443 para GitHub y OCI APIs.
+- Apunta el dominio público a la IP del nodo master.
+
+### 2) Base de datos (Autonomous DB)
+- Crea una Autonomous Database.
+- Descarga el **wallet** y descomprímelo en tu máquina local.
+- Elige el alias del servicio (`*_high`, `*_medium`, etc.) de `tnsnames.ora`.
+
+### 3) Object Storage (bucket)
+- Crea un bucket en Object Storage.
+- Anota **namespace**, **bucket name** y región.
+- Asegura permisos IAM para el usuario (o principal) que usará el SDK.
+
+### 4) Credenciales OCI para el SDK
+- Genera una **API Key** para el usuario (o crea una nueva):
+  - `oci setup config` y guarda el config en un fichero dedicado (ej. `~/.oci/config_cloud`).
+  - Sube la **clave pública** al usuario en OCI Console → User → API Keys.
+- Guarda la **clave privada** en una ruta local segura.
+
+### 5) Secretos locales para el deploy
+Crea `zordon/.secrets` con lo mínimo:
+
+```ini
+# Dominio y WhatsApp/Graph
+DOMAIN=tu-dominio.com
+WEBHOOK_VERIFY_TOKEN=tu-token-secreto
+GRAPH_URL=https://graph.facebook.com/v19.0
+GRAPH_API_TOKEN=tu_token
+
+# Tailscale
+TAILSCALE_AUTHKEY=tskey-auth-tu-key
+
+# Oracle DB
+ORACLE_USER=tu_usuario
+ORACLE_PASSWORD=tu_password
+ORACLE_DSN=golismeos_high
+ORACLE_WALLET_PATH=/ruta/al/wallet_descomprimido
+ORACLE_WALLET_PASSWORD=opcional_si_protegido
+
+# OCI SDK (Object Storage)
+OCI_CONFIG_PATH=/home/usuario/.oci/config_cloud
+OCI_API_KEY_PATH=/home/usuario/.oci/cloud.pem
+OCI_PROFILE=DEFAULT
+OCI_BUCKET_NAME=tu_bucket
+OCI_BUCKET_NAMESPACE=tu_namespace
+OCI_BUCKET_PREFIX=whatsapp
+
+# GHCR (opcional)
+GHCR_USERNAME=tu-usuario-github
+GHCR_TOKEN=tu_token_ghcr
+```
+
+Notas:
+- `ORACLE_WALLET_PATH` debe apuntar a **carpeta**, no ZIP.
+- `OCI_CONFIG_PATH` y `OCI_API_KEY_PATH` no se suben al repo; se montan como secret en el pod.
+### 6) Añadir el inventory
+Edita `zordon/ansible/inventory.ini` con tu `master` y, si aplica, los `nodes`.
 
 ## 🛠 Instalación (Ansible)
 
@@ -50,20 +114,7 @@ git clone https://github.com/BorisFaj/remedios.git
 cd remedios
 ```
 
-Crea un archivo `.secrets` en `zordon/.secrets` (este archivo es ignorado por git):
-
-```bash
-# zordon/.secrets
-DOMAIN=tu-dominio.com
-WEBHOOK_VERIFY_TOKEN=tu-token-secreto
-TAILSCALE_AUTHKEY=tskey-auth-tu-key
-GHCR_USERNAME=tu-usuario-github
-GHCR_TOKEN=tu_token_ghcr
-# Opcional: Configuración de Whisper
-WHISPER_MODEL=ggml-large-v3-turbo-q5_0.bin
-```
-
-No compartas este archivo.
+El archivo `zordon/.secrets` se define en la sección de **Pasos Previos**. No lo compartas.
 
 ### 2. Configurar Inventario
 
@@ -115,6 +166,19 @@ Gracias a la arquitectura basada en Tailscale, añadir nodos es trivial, incluso
 ### Logs en Oracle
 - La capa de persistencia vive en `remedios/core/api/persistence` y la usa la API interna.
 - Variables necesarias en `.secrets`: `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_DSN` (alias en `tnsnames.ora`). El wallet se monta como secreto en `/opt/oracle/wallet` y el pod exporta `ORACLE_WALLET_PATH=/opt/oracle/wallet`. Opcional: `ORACLE_WALLET_PASSWORD`.
+
+### Migraciones (Alembic)
+Usa el script para cargar variables de `zordon/.secrets` y ejecutar Alembic con el wallet local:
+
+```bash
+./scripts/alembic-oracle.sh stamp head
+./scripts/alembic-oracle.sh upgrade head
+```
+
+Para crear nuevas migraciones (revisa el SQL generado):
+```bash
+./scripts/alembic-oracle.sh revision -m "descripcion" --autogenerate
+```
 
 ## 🐛 Debugging y Logs
 

@@ -12,6 +12,9 @@ def test_oracle_connectivity():
     missing = [k for k in required if not os.getenv(k)]
     if missing:
         pytest.skip(f"Faltan variables ORACLE_*: {', '.join(missing)}")
+    wallet_path = os.getenv("ORACLE_WALLET_PATH")
+    if not wallet_path or not os.path.exists(wallet_path):
+        pytest.skip(f"Wallet no encontrado en {wallet_path}")
 
     # Recargar sender tras cargar el entorno para que coja las variables
     from remedios.core.api.persistence import db

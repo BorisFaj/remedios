@@ -4,8 +4,11 @@ import os
 import sys
 import logging
 import requests
+import oci
+import mimetypes
+import time
 from flask import Flask, request, jsonify, abort
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from remedios.commons.schemas import TextMessage, AudioMessage
 from remedios.core.api.persistence.storage import (
     validate_user,
@@ -13,8 +16,9 @@ from remedios.core.api.persistence.storage import (
     create_job,
     update_job_status,
     save_job_result,
+    save_job_audio,
 )
-from remedios.core.routing import route
+from remedios.core.routing import kafka_route, api_route
 
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
@@ -28,6 +32,14 @@ logger = logging.getLogger()
 # Flask
 app = Flask(__name__)
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN")
+OCI_BUCKET_NAME = os.environ.get("OCI_BUCKET_NAME")
+OCI_BUCKET_NAMESPACE = os.environ.get("OCI_BUCKET_NAMESPACE") or os.environ.get("OCI_NAMESPACE")
+OCI_BUCKET_PREFIX = os.environ.get("OCI_BUCKET_PREFIX", "whatsapp")
+OCI_PAR_TTL_MINUTES = int(os.environ.get("OCI_PAR_TTL_MINUTES", "60"))
+OCI_USE_INSTANCE_PRINCIPALS = os.environ.get("OCI_USE_INSTANCE_PRINCIPALS") == "1"
+OCI_CONFIG_PATH = os.environ.get("OCI_CONFIG_PATH", os.path.expanduser("~/.oci/config"))
+OCI_PROFILE = os.environ.get("OCI_PROFILE", "DEFAULT")
+OCI_REGION = os.environ.get("OCI_REGION")
 
 
 def _check_internal_auth():
@@ -47,6 +59,42 @@ def _post_graph(url: str, payload: dict) -> requests.Response:
     except Exception as exc:  # pragma: no cover - red de terceros
         logger.error("Graph POST %s failed: %s", url, exc)
         raise
+
+
+def _get_object_storage_client():
+    if OCI_USE_INSTANCE_PRINCIPALS:
+        signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+        client = oci.object_storage.ObjectStorageClient(config={}, signer=signer)
+    else:
+        config = oci.config.from_file(OCI_CONFIG_PATH, OCI_PROFILE)
+        client = oci.object_storage.ObjectStorageClient(config)
+
+    if OCI_REGION:
+        client.base_client.set_region(OCI_REGION)
+    return client
+
+
+def _guess_extension(mime_type: str | None) -> str:
+    if not mime_type:
+        return ".ogg"
+    known = {
+        "audio/ogg": ".ogg",
+        "audio/m4a": ".m4a",
+        "audio/mp4": ".mp4",
+        "audio/mpeg": ".mp3",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "audio/webm": ".webm",
+    }
+    if mime_type in known:
+        return known[mime_type]
+    ext = mimetypes.guess_extension(mime_type)
+    return ext or ""
+
+
+def _build_object_key(job_id: int, audio_id: str, mime_type: str | None) -> str:
+    ext = _guess_extension(mime_type)
+    return f"{OCI_BUCKET_PREFIX}/{job_id}/{audio_id}{ext}"
 
 
 def _send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
@@ -152,7 +200,7 @@ def build_message(content, phone, msg_id, number_id, job_id, topic) -> TextMessa
         "timestamp": datetime.now(timezone.utc),
     }
 
-    if topic == route["audio"]:
+    if topic == kafka_route["audio"]:
         # content es dict con audio_id, mime_type
         return AudioMessage(
             **base_args,
@@ -195,7 +243,7 @@ def internal_log_message():
     return jsonify({"status": "ok", "job_id": job_id}), 200
 
 
-@app.route("/internal/job_status", methods=["POST"])
+@app.route(api_route["job_status"], methods=["POST"])
 def internal_job_status():
     if not _check_internal_auth():
         abort(401)
@@ -211,7 +259,7 @@ def internal_job_status():
     return jsonify({"status": "ok"}), 200
 
 
-@app.route("/internal/job_result", methods=["POST"])
+@app.route(api_route["job_result"], methods=["POST"])
 def internal_job_result():
     if not _check_internal_auth():
         abort(401)
@@ -248,6 +296,104 @@ def internal_job_result():
     if not ok:
         return jsonify({"error": "failed to save job_result"}), 500
     return jsonify({"status": "ok"}), 200
+
+
+@app.route(api_route["job_audio"], methods=["POST"])
+def internal_job_audio():
+    if not _check_internal_auth():
+        abort(401)
+    payload = request.get_json(silent=True) or {}
+    job_id = payload.get("job_id")
+    provider = payload.get("provider")
+    bucket_name = payload.get("bucket_name")
+    namespace = payload.get("namespace")
+    object_key = payload.get("object_key")
+    size_bytes = payload.get("size_bytes")
+    content_type = payload.get("content_type")
+    etag = payload.get("etag")
+    audio_id = payload.get("audio_id")
+
+    missing = [
+        k
+        for k, v in {
+            "job_id": job_id,
+            "provider": provider,
+            "bucket_name": bucket_name,
+            "namespace": namespace,
+            "object_key": object_key,
+        }.items()
+        if not v
+    ]
+    if missing:
+        return jsonify({"error": f"Faltan campos: {', '.join(missing)}"}), 400
+
+    ok = save_job_audio(
+        job_id,
+        provider,
+        bucket_name,
+        namespace,
+        object_key,
+        size_bytes=size_bytes,
+        content_type=content_type,
+        etag=etag,
+        audio_id=audio_id,
+    )
+    if not ok:
+        return jsonify({"error": "failed to save job_audio"}), 500
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/internal/audio_upload_url", methods=["POST"])
+def internal_audio_upload_url():
+    if not _check_internal_auth():
+        abort(401)
+    if not OCI_BUCKET_NAME or not OCI_BUCKET_NAMESPACE:
+        return jsonify({"error": "OCI bucket config missing"}), 500
+
+    payload = request.get_json(silent=True) or {}
+    job_id = payload.get("job_id")
+    audio_id = payload.get("audio_id")
+    mime_type = payload.get("mime_type")
+    object_key = payload.get("object_key")
+
+    missing = [k for k, v in {"job_id": job_id, "audio_id": audio_id}.items() if not v]
+    if missing:
+        return jsonify({"error": f"Faltan campos: {', '.join(missing)}"}), 400
+
+    if not object_key:
+        object_key = _build_object_key(job_id, audio_id, mime_type)
+
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=OCI_PAR_TTL_MINUTES)
+    details = oci.object_storage.models.CreatePreauthenticatedRequestDetails(
+        name=f"job-{job_id}-{int(time.time())}",
+        object_name=object_key,
+        access_type="ObjectWrite",
+        time_expires=expires_at,
+    )
+    try:
+        client = _get_object_storage_client()
+        resp = client.create_preauthenticated_request(
+            OCI_BUCKET_NAMESPACE,
+            OCI_BUCKET_NAME,
+            details,
+        )
+        access_uri = resp.data.access_uri
+        upload_url = f"{client.base_client.endpoint}{access_uri}"
+    except Exception as exc:
+        logger.exception("Error creando PAR para job_id=%s", job_id)
+        return jsonify({"error": "Ocurrió un error interno al generar el enlace de carga."}), 500
+
+    return jsonify(
+        {
+            "status": "ok",
+            "provider": "oracle",
+            "bucket_name": OCI_BUCKET_NAME,
+            "namespace": OCI_BUCKET_NAMESPACE,
+            "object_key": object_key,
+            "upload_url": upload_url,
+            "expires_at": expires_at.isoformat(),
+        }
+    ), 200
 
 
 @app.route("/internal/send_text_answer", methods=["POST"])
