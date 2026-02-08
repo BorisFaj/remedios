@@ -84,8 +84,8 @@ ORACLE_WALLET_PATH=/ruta/al/wallet_descomprimido
 ORACLE_WALLET_PASSWORD=opcional_si_protegido
 
 # OCI SDK (Object Storage)
-OCI_CONFIG_PATH=/.oci/config_cloud
-OCI_API_KEY_PATH=/.oci/cloud.pem
+OCI_CONFIG_PATH=/home/usuario/.oci/config_cloud
+OCI_API_KEY_PATH=/home/usuario/.oci/cloud.pem
 OCI_PROFILE=DEFAULT
 OCI_BUCKET_NAME=tu_bucket
 OCI_BUCKET_NAMESPACE=tu_namespace
@@ -98,6 +98,7 @@ GHCR_TOKEN=tu_token_ghcr
 
 Notas:
 - `ORACLE_WALLET_PATH` debe apuntar a **carpeta**, no ZIP.
+- `OCI_CONFIG_PATH` y `OCI_API_KEY_PATH` no se suben al repo; se montan como secret en el pod.
 ### 6) Añadir el inventory
 Edita `zordon/ansible/inventory.ini` con tu `master` y, si aplica, los `nodes`.
 
@@ -113,20 +114,7 @@ git clone https://github.com/BorisFaj/remedios.git
 cd remedios
 ```
 
-Crea un archivo `.secrets` en `zordon/.secrets` (este archivo es ignorado por git):
-
-```bash
-# zordon/.secrets
-DOMAIN=tu-dominio.com
-WEBHOOK_VERIFY_TOKEN=tu-token-secreto
-TAILSCALE_AUTHKEY=tskey-auth-tu-key
-GHCR_USERNAME=tu-usuario-github
-GHCR_TOKEN=tu_token_ghcr
-# Opcional: Configuración de Whisper
-WHISPER_MODEL=ggml-large-v3-turbo-q5_0.bin
-```
-
-No compartas este archivo.
+El archivo `zordon/.secrets` se define en la sección de **Pasos Previos**. No lo compartas.
 
 ### 2. Configurar Inventario
 
