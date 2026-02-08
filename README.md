@@ -91,6 +91,18 @@ OCI_BUCKET_NAME=tu_bucket
 OCI_BUCKET_NAMESPACE=tu_namespace
 OCI_BUCKET_PREFIX=whatsapp
 
+# OpenClaw (opcional)
+OPENCLAW_IMAGE=ghcr.io/tu-org/openclaw:latest
+OPENCLAW_SNAPSHOT_IMAGE=ghcr.io/tu-org/openclaw-snapshot:latest
+OPENCLAW_PVC_SIZE=5Gi
+OPENCLAW_STORAGE_CLASS=local-path
+OPENCLAW_BUCKET_PREFIX=openclaw/snapshots
+OPENCLAW_RETENTION_DAYS=10
+OPENCLAW_CHECKPOINT_INTERVAL_MINUTES=30
+OPENCLAW_DAILY_HOUR_UTC=3
+OPENCLAW_DAILY_MINUTE_UTC=0
+OPENCLAW_DAILY_CRON="0 3 * * *"
+
 # GHCR (opcional)
 GHCR_USERNAME=tu-usuario-github
 GHCR_TOKEN=tu_token_ghcr
@@ -142,7 +154,28 @@ Una vez el cluster esté arriba, despliega los servicios de aplicación (dispatc
 
 ```bash
 ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml \
-  -e "deploy_dispatcher=true deploy_remedios_api=true deploy_remetext=true deploy_whisper_turbo=true"
+  -e "deploy_dispatcher=true deploy_remedios_api=true deploy_remetext=true deploy_whisper_turbo=true deploy_openclaw=false"
+```
+
+### OpenClaw (opcional)
+
+Despliegue de OpenClaw con volumen persistente (PVC), restore al arranque desde bucket y backups:
+- checkpoint cada 30 minutos (sidecar),
+- backup diario (CronJob),
+- backup best effort al apagado del pod (`preStop`),
+- retencion automatica de snapshots de los ultimos 10 dias.
+
+```bash
+ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml \
+  -e "deploy_openclaw=true"
+```
+
+Operaciones habituales:
+```bash
+kubectl -n remedios logs -l app=openclaw -f
+kubectl -n remedios port-forward svc/openclaw 18789:18789
+kubectl -n remedios exec deploy/openclaw -c openclaw -- openclaw onboard
+kubectl -n remedios exec deploy/openclaw -c openclaw -- openclaw pairing approve telegram <CODE>
 ```
 
 ## 📈 Escalabilidad (Añadir Nodos)

@@ -1,0 +1,84 @@
+name: Build and Push OpenClaw (develop)
+
+on:
+  push:
+    branches: ["develop"]
+    paths:
+      - "remedios/services/openclaw/**"
+      - "zordon/deploy/openclaw.yaml"
+      - "zordon/deploy/openclaw-backup-cronjob.yaml"
+      - ".github/workflows/build-and-push-openclaw.yml"
+  pull_request:
+    branches: ["develop"]
+    paths:
+      - "remedios/services/openclaw/**"
+      - "zordon/deploy/openclaw.yaml"
+      - "zordon/deploy/openclaw-backup-cronjob.yaml"
+      - ".github/workflows/build-and-push-openclaw.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+  DO_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: openclaw
+            image: openclaw
+            dockerfile: ./remedios/services/openclaw/Dockerfile
+            context: .
+          - name: openclaw-snapshot
+            image: openclaw-snapshot
+            dockerfile: ./remedios/services/openclaw/snapshot.Dockerfile
+            context: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Lowercase owner
+        id: vars
+        run: echo "owner_lc=${OWNER,,}" >> $GITHUB_OUTPUT
+        env:
+          OWNER: ${{ env.OWNER }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner_lc }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=develop
+            type=raw,value=latest
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.DO_PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

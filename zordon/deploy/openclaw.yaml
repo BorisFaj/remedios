@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openclaw-config
+  namespace: remedios
+data:
+  OPENCLAW_PORT: "18789"
+  OPENCLAW_STATE_DIR: "/home/ubuntu/.openclaw"
+  OPENCLAW_BUCKET_PREFIX: "${OPENCLAW_BUCKET_PREFIX}"
+  OPENCLAW_RETENTION_DAYS: "${OPENCLAW_RETENTION_DAYS}"
+  OPENCLAW_RESTORE_MODE: "if-empty"
+  OPENCLAW_CHECKPOINT_INTERVAL_MINUTES: "${OPENCLAW_CHECKPOINT_INTERVAL_MINUTES}"
+  OPENCLAW_DAILY_HOUR_UTC: "${OPENCLAW_DAILY_HOUR_UTC}"
+  OPENCLAW_DAILY_MINUTE_UTC: "${OPENCLAW_DAILY_MINUTE_UTC}"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openclaw-pvc
+  namespace: remedios
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "${OPENCLAW_STORAGE_CLASS}"
+  resources:
+    requests:
+      storage: "${OPENCLAW_PVC_SIZE}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw
+  namespace: remedios
+  labels:
+    app: openclaw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openclaw
+  template:
+    metadata:
+      labels:
+        app: openclaw
+    spec:
+      imagePullSecrets:
+        - name: ghcr-creds
+      initContainers:
+        - name: openclaw-restore
+          image: "${OPENCLAW_SNAPSHOT_IMAGE}"
+          imagePullPolicy: Always
+          command: ["python", "/app/openclaw_snapshot.py", "restore", "--mode", "if-empty"]
+          envFrom:
+            - configMapRef:
+                name: openclaw-config
+            - secretRef:
+                name: remedios-secrets
+          env:
+            - name: OCI_CONFIG_PATH
+              value: /opt/oci/config
+          volumeMounts:
+            - name: openclaw-state
+              mountPath: /home/ubuntu/.openclaw
+            - name: oci-config
+              mountPath: /opt/oci
+              readOnly: true
+      containers:
+        - name: openclaw
+          image: "${OPENCLAW_IMAGE}"
+          imagePullPolicy: Always
+          command: ["openclaw", "gateway"]
+          env:
+            - name: HOME
+              value: /home/ubuntu
+          ports:
+            - containerPort: 18789
+          readinessProbe:
+            tcpSocket:
+              port: 18789
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 18789
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          volumeMounts:
+            - name: openclaw-state
+              mountPath: /home/ubuntu/.openclaw
+        - name: openclaw-snapshot
+          image: "${OPENCLAW_SNAPSHOT_IMAGE}"
+          imagePullPolicy: Always
+          command: ["python", "/app/openclaw_snapshot.py", "loop"]
+          envFrom:
+            - configMapRef:
+                name: openclaw-config
+            - secretRef:
+                name: remedios-secrets
+          env:
+            - name: OCI_CONFIG_PATH
+              value: /opt/oci/config
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - python /app/openclaw_snapshot.py --kind prestop backup || true
+          volumeMounts:
+            - name: openclaw-state
+              mountPath: /home/ubuntu/.openclaw
+            - name: oci-config
+              mountPath: /opt/oci
+              readOnly: true
+      volumes:
+        - name: openclaw-state
+          persistentVolumeClaim:
+            claimName: openclaw-pvc
+        - name: oci-config
+          secret:
+            secretName: oci-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw
+  namespace: remedios
+spec:
+  selector:
+    app: openclaw
+  ports:
+    - port: 18789
+      targetPort: 18789
