@@ -122,4 +122,4 @@ jobs:
           pip install -r remedios/consumers/audio/whisper_turbo/requirements.txt
 
       - name: Run unit tests
-        run: pytest -q remedios/test/test_persistence_storage.py remedios/test/test_consumers_processing.py
+        run: python -m pytest -q remedios/test/test_persistence_storage.py remedios/test/test_consumers_processing.py
