@@ -18,7 +18,6 @@
     api_manifest: "{{ app_root }}/deploy/remedios-api.yaml"
     dispatcher_image: "ghcr.io/borisfaj/remedios-dispatcher:latest"
     api_image: "ghcr.io/borisfaj/remedios-api:latest"
-    whisper_cpp_manifest: "{{ app_root }}/deploy/audio_whispercpp.yaml"
     whisper_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
@@ -285,13 +284,6 @@
         mode: "0644"
       when: (deploy_remetext | default(false) | bool) == true
 
-    - name: Copiar manifiesto de whisper-cpp
-      copy:
-        src: ../deploy/audio_whispercpp.yaml
-        dest: "{{ whisper_cpp_manifest }}"
-        mode: "0644"
-      when: (deploy_whisper_cpp | default(false) | bool) == true
-
     - name: Copiar manifiesto de whisper-turbo
       copy:
         src: ../deploy/audio_whisperturbo.yaml
@@ -350,7 +342,7 @@
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
         rm -f "$tmp"
-      when: (deploy_dispatcher | default(false) | bool) or (deploy_remedios_api | default(false) | bool) or (deploy_remetext | default(false) | bool) or (deploy_whisper_turbo | default(false) | bool) or (deploy_whisper_cpp | default(false) | bool)
+      when: (deploy_dispatcher | default(false) | bool) or (deploy_remedios_api | default(false) | bool) or (deploy_remetext | default(false) | bool) or (deploy_whisper_turbo | default(false) | bool)
 
     - name: Crear/actualizar pull secret ghcr-creds para GHCR (si hay credenciales)
       shell: |
@@ -381,17 +373,3 @@
     - name: Esperar rollout de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remetext -n remedios
       when: (deploy_remetext | default(true) | bool) == true
-
-    - name: Aplicar manifiesto de whisper-cpp
-      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ whisper_cpp_manifest }}
-      when: (deploy_whisper_cpp | default(false) | bool) == true
-
-    - name: Reiniciar deployment whisper-cpp para coger cambios
-      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/whisper-cpp -n remedios
-      register: restart_audio
-      changed_when: "'restarted' in restart_audio.stdout or restart_audio.rc == 0"
-      when: (deploy_whisper_cpp | default(false) | bool) == true
-
-    - name: Esperar rollout de whisper-cpp
-      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/whisper-cpp -n remedios
-      when: (deploy_whisper_cpp | default(false) | bool) == true

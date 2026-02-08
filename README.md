@@ -29,7 +29,7 @@ El sistema se compone de varios módulos desacoplados:
     - **Dispatcher** (`remedios/core/dispatcher`): Recibe webhooks de WhatsApp, registra el mensaje vía API interna y publica en Kafka.
     - **API interna** (`remedios/core/api`): Persiste estados/resultados y ofrece endpoints internos para envío de respuestas y extracción de audio.
     - **Remetext** (`remedios/consumers/text`): Procesamiento de texto y respuesta por WhatsApp.
-    - **Whisper Workers** (`remedios/consumers/audio`): Transcripción de audio con `whisper-turbo` o `whisper-cpp`.
+    - **Whisper Workers** (`remedios/consumers/audio`): Transcripción de audio con `whisper-turbo`.
 
 ## 📋 Requisitos Previos
 
@@ -142,7 +142,7 @@ Una vez el cluster esté arriba, despliega los servicios de aplicación (dispatc
 
 ```bash
 ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml \
-  -e "deploy_dispatcher=true deploy_remedios_api=true deploy_remetext=true deploy_whisper_turbo=true deploy_whisper_cpp=false"
+  -e "deploy_dispatcher=true deploy_remedios_api=true deploy_remetext=true deploy_whisper_turbo=true"
 ```
 
 ## 📈 Escalabilidad (Añadir Nodos)
