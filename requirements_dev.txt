@@ -1,3 +1,4 @@
 pytest
+alembic
 oracledb
 ruff

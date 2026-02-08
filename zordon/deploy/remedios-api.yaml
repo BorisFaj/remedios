@@ -27,6 +27,10 @@ spec:
           env:
             - name: ORACLE_WALLET_PATH
               value: /opt/oracle/wallet
+            - name: TNS_ADMIN
+              value: /opt/oracle/wallet
+            - name: OCI_CONFIG_PATH
+              value: /opt/oci/config
             - name: INTERNAL_API_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -50,10 +54,16 @@ spec:
             - name: oracle-wallet
               mountPath: /opt/oracle/wallet
               readOnly: true
+            - name: oci-config
+              mountPath: /opt/oci
+              readOnly: true
       volumes:
         - name: oracle-wallet
           secret:
             secretName: oracle-wallet
+        - name: oci-config
+          secret:
+            secretName: oci-config
 ---
 apiVersion: v1
 kind: Service
