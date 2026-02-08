@@ -30,6 +30,7 @@ El sistema se compone de varios módulos desacoplados:
     - **API interna** (`remedios/core/api`): Persiste estados/resultados y ofrece endpoints internos para envío de respuestas y extracción de audio.
     - **Remetext** (`remedios/consumers/text`): Procesamiento de texto y respuesta por WhatsApp.
     - **Whisper Workers** (`remedios/consumers/audio`): Transcripción de audio con `whisper-turbo`.
+    - **OpenClaw** (`remedios/services/openclaw`): Servicio UI/agent con estado persistente y snapshots a OCI.
 
 ## 📋 Requisitos Previos
 
@@ -102,6 +103,7 @@ OPENCLAW_CHECKPOINT_INTERVAL_MINUTES=30
 OPENCLAW_DAILY_HOUR_UTC=3
 OPENCLAW_DAILY_MINUTE_UTC=0
 OPENCLAW_DAILY_CRON="0 3 * * *"
+OPENCLAW_UI_HOST=openclaw.tu-tailnet.ts.net
 
 # GHCR (opcional)
 GHCR_USERNAME=tu-usuario-github
@@ -165,17 +167,49 @@ Despliegue de OpenClaw con volumen persistente (PVC), restore al arranque desde 
 - backup best effort al apagado del pod (`preStop`),
 - retencion automatica de snapshots de los ultimos 10 dias.
 
+Build ARM64 de imagenes OpenClaw:
+```bash
+docker buildx build --platform linux/arm64 \
+  --no-cache \
+  -t ghcr.io/borisfaj/openclaw:latest \
+  -f remedios/services/openclaw/Dockerfile \
+  --push .
+
+docker buildx build --platform linux/arm64 \
+  --no-cache \
+  -t ghcr.io/borisfaj/openclaw-snapshot:latest \
+  -f remedios/services/openclaw/snapshot.Dockerfile \
+  --push .
+```
+
+Desplegar servicio OpenClaw + UI en un solo comando:
 ```bash
 ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml \
-  -e "deploy_openclaw=true"
+  -e "deploy_openclaw=true deploy_openclaw_ui=true"
+```
+
+URL UI (desde Tailscale):
+```text
+https://<OPENCLAW_UI_HOST>
+```
+
+Desactivar UI de OpenClaw:
+```bash
+ansible-playbook -i zordon/ansible/inventory.ini zordon/ansible/services.yml \
+  -e "deploy_openclaw_ui=false"
 ```
 
 Operaciones habituales:
 ```bash
 kubectl -n remedios logs -l app=openclaw -f
-kubectl -n remedios port-forward svc/openclaw 18789:18789
 kubectl -n remedios exec deploy/openclaw -c openclaw -- openclaw onboard
 kubectl -n remedios exec deploy/openclaw -c openclaw -- openclaw pairing approve telegram <CODE>
+```
+
+Consultar token autogenerado de OpenClaw (para URL tokenizada):
+```bash
+POD=$(kubectl -n remedios get pod -l app=openclaw -o jsonpath='{.items[0].metadata.name}')
+kubectl -n remedios exec "$POD" -c openclaw -- sh -lc "grep -n '\"token\"' /home/node/.openclaw/openclaw.json"
 ```
 
 ## 📈 Escalabilidad (Añadir Nodos)

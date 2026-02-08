@@ -5,7 +5,7 @@ metadata:
   namespace: remedios
 data:
   OPENCLAW_PORT: "18789"
-  OPENCLAW_STATE_DIR: "/home/ubuntu/.openclaw"
+  OPENCLAW_STATE_DIR: "/home/node/.openclaw"
   OPENCLAW_BUCKET_PREFIX: "${OPENCLAW_BUCKET_PREFIX}"
   OPENCLAW_RETENTION_DAYS: "${OPENCLAW_RETENTION_DAYS}"
   OPENCLAW_RESTORE_MODE: "if-empty"
@@ -35,6 +35,8 @@ metadata:
     app: openclaw
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: openclaw
@@ -60,7 +62,7 @@ spec:
               value: /opt/oci/config
           volumeMounts:
             - name: openclaw-state
-              mountPath: /home/ubuntu/.openclaw
+              mountPath: /home/node/.openclaw
             - name: oci-config
               mountPath: /opt/oci
               readOnly: true
@@ -68,25 +70,41 @@ spec:
         - name: openclaw
           image: "${OPENCLAW_IMAGE}"
           imagePullPolicy: Always
-          command: ["openclaw", "gateway"]
+          args: ["gateway", "--allow-unconfigured"]
+          tty: true
+          stdin: true
+          envFrom:
+            - configMapRef:
+                name: openclaw-config
+            - secretRef:
+                name: remedios-secrets
           env:
             - name: HOME
-              value: /home/ubuntu
+              value: /home/node
           ports:
             - containerPort: 18789
+          volumeMounts:
+            - name: openclaw-state
+              mountPath: /home/node/.openclaw
+        - name: openclaw-proxy
+          image: alpine/socat:1.8.0.3
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - socat TCP-LISTEN:18790,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:18789
+          ports:
+            - containerPort: 18790
           readinessProbe:
             tcpSocket:
-              port: 18789
+              port: 18790
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: 18789
+              port: 18790
             initialDelaySeconds: 20
             periodSeconds: 20
-          volumeMounts:
-            - name: openclaw-state
-              mountPath: /home/ubuntu/.openclaw
         - name: openclaw-snapshot
           image: "${OPENCLAW_SNAPSHOT_IMAGE}"
           imagePullPolicy: Always
@@ -108,7 +126,7 @@ spec:
                   - python /app/openclaw_snapshot.py --kind prestop backup || true
           volumeMounts:
             - name: openclaw-state
-              mountPath: /home/ubuntu/.openclaw
+              mountPath: /home/node/.openclaw
             - name: oci-config
               mountPath: /opt/oci
               readOnly: true
@@ -130,4 +148,4 @@ spec:
     app: openclaw
   ports:
     - port: 18789
-      targetPort: 18789
+      targetPort: 18790

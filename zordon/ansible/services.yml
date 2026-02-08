@@ -21,6 +21,7 @@
     whisper_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
     openclaw_manifest: "{{ app_root }}/deploy/openclaw.yaml"
     openclaw_backup_manifest: "{{ app_root }}/deploy/openclaw-backup-cronjob.yaml"
+    openclaw_ui_manifest: "{{ app_root }}/deploy/openclaw-ui-ingress.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -307,6 +308,13 @@
         mode: "0644"
       when: (deploy_openclaw | default(false) | bool) == true
 
+    - name: Copiar manifiesto de ingress UI de openclaw
+      copy:
+        src: ../deploy/openclaw-ui-ingress.yaml
+        dest: "{{ openclaw_ui_manifest }}"
+        mode: "0644"
+      when: deploy_openclaw_ui is defined
+
     - name: Renderizar manifiestos de openclaw con variables de .secrets
       shell: |
         set -a
@@ -331,6 +339,21 @@
       args:
         executable: /bin/bash
       when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Renderizar ingress UI de openclaw con variables de .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        if [ -z "${OPENCLAW_UI_HOST:-}" ]; then
+          echo "OPENCLAW_UI_HOST debe estar definido en {{ app_root }}/.secrets para activar la UI" >&2
+          exit 1
+        fi
+        export OPENCLAW_UI_HOST
+        envsubst < {{ openclaw_ui_manifest }} > /tmp/openclaw-ui.rendered.yaml
+      args:
+        executable: /bin/bash
+      when: (deploy_openclaw_ui | default(false) | bool) == true
 
     - name: Aplicar manifiesto de whisper-turbo
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ whisper_turbo_manifest }}
@@ -368,7 +391,7 @@
     - name: Crear/actualizar secret remedios-secrets desde .secrets (sin ORACLE_WALLET_PATH)
       shell: |
         tmp=$(mktemp)
-        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN|OCI_CONFIG_PATH|OCI_API_KEY_PATH)=' {{ app_root }}/.secrets > "$tmp"
+        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN|OCI_CONFIG_PATH|OCI_API_KEY_PATH|OPENCLAW_GATEWAY_TOKEN)=' {{ app_root }}/.secrets > "$tmp"
         dsn="{{ oracle_dsn }}"
         if [ -z "$dsn" ] && [ -f "{{ wallet_dir }}/tnsnames.ora" ]; then
           dsn=$(awk 'match($0,/^[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*=/,a){print a[1]; exit}' {{ wallet_dir }}/tnsnames.ora)
@@ -417,6 +440,16 @@
     - name: Esperar rollout de openclaw
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/openclaw -n remedios
       when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Aplicar ingress UI de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/openclaw-ui.rendered.yaml
+      when: (deploy_openclaw_ui | default(false) | bool) == true
+
+    - name: Desactivar ingress UI de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} delete ingress/openclaw-ui -n remedios --ignore-not-found=true
+      when:
+        - deploy_openclaw_ui is defined
+        - (deploy_openclaw_ui | bool) == false
 
 
     - name: Aplicar manifiesto de remetext

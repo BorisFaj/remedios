@@ -43,7 +43,7 @@ spec:
                   value: /opt/oci/config
               volumeMounts:
                 - name: openclaw-state
-                  mountPath: /home/ubuntu/.openclaw
+                  mountPath: /home/node/.openclaw
                 - name: oci-config
                   mountPath: /opt/oci
                   readOnly: true

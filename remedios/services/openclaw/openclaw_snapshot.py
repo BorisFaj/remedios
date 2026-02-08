@@ -214,7 +214,7 @@ def loop(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Snapshot/restore de estado OpenClaw")
-    parser.add_argument("--state-dir", default=os.getenv("OPENCLAW_STATE_DIR", "/home/ubuntu/.openclaw"))
+    parser.add_argument("--state-dir", default=os.getenv("OPENCLAW_STATE_DIR", "/home/node/.openclaw"))
     parser.add_argument("--namespace", default=os.getenv("OCI_BUCKET_NAMESPACE"))
     parser.add_argument("--bucket", default=os.getenv("OCI_BUCKET_NAME"))
     parser.add_argument("--prefix", default=os.getenv("OPENCLAW_BUCKET_PREFIX", "openclaw/snapshots"))
