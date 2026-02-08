@@ -2,8 +2,6 @@
   <img src="logo.png" alt="Remedios logo" width="600"/>
 </p>
 
-**Webhook de WhatsApp escalable y ligero para Oracle Cloud Always Free (ARM).**
-
 Remedios despliega una arquitectura de microservicios sobre Kubernetes (k3s) con Kafka, API interna, workers y servicios auxiliares como OpenClaw.
 
 ## Requisitos Previos
