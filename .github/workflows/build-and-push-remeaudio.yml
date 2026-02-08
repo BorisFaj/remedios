@@ -5,14 +5,12 @@ on:
     branches: ["develop"]
     paths:
       - "remedios/consumers/audio/**"
-      - "zordon/deploy/audio_whispercpp.yaml"
       - "zordon/deploy/audio_whisperturbo.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
   pull_request:
     branches: ["develop"]
     paths:
       - "remedios/consumers/audio/**"
-      - "zordon/deploy/audio_whispercpp.yaml"
       - "zordon/deploy/audio_whisperturbo.yaml"
       - ".github/workflows/build-and-push-remeaudio.yml"
 
@@ -34,10 +32,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: whisper-cpp
-            image: whisper-cpp
-            dockerfile: ./remedios/consumers/audio/whispercpp/Dockerfile
-            context: .
           - name: whisper-turbo
             image: whisper-turbo
             dockerfile: ./remedios/consumers/audio/whisper_turbo/Dockerfile
