@@ -76,7 +76,7 @@ def _get_object_storage_client():
 
 def _guess_extension(mime_type: str | None) -> str:
     if not mime_type:
-        return ""
+        return ".ogg"
     known = {
         "audio/ogg": ".ogg",
         "audio/m4a": ".m4a",
