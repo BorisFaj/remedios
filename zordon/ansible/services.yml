@@ -454,14 +454,14 @@
 
     - name: Aplicar manifiesto de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remetext.yaml
-      when: (deploy_remetext | default(true) | bool) == true
+      when: (deploy_remetext | default(false) | bool) == true
 
     - name: Reiniciar deployment remetext para coger cambios
       command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remetext -n remedios
       register: restart_out
       changed_when: "'restarted' in restart_out.stdout or restart_out.rc == 0"
-      when: (deploy_remetext | default(true) | bool) == true
+      when: (deploy_remetext | default(false) | bool) == true
 
     - name: Esperar rollout de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remetext -n remedios
-      when: (deploy_remetext | default(true) | bool) == true
+      when: (deploy_remetext | default(false) | bool) == true

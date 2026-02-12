@@ -3,6 +3,7 @@ import argparse
 import io
 import json
 import os
+import random
 import shutil
 import tarfile
 import tempfile
@@ -58,6 +59,24 @@ def _write_bytes(path: Path, data: bytes):
         fh.write(data)
 
 
+def _call_with_retries(args, action_name: str, func):
+    """Retry wrapper for transient OCI/network failures."""
+    attempts = max(int(getattr(args, "oci_max_retries", 3)), 0) + 1
+    base_sleep = max(float(getattr(args, "oci_retry_base_seconds", 2.0)), 0.1)
+    for attempt in range(1, attempts + 1):
+        try:
+            return func()
+        except Exception as exc:
+            if attempt >= attempts:
+                raise
+            sleep_s = base_sleep * (2 ** (attempt - 1)) + random.uniform(0, 0.25)
+            print(
+                f"[retry] action={action_name} attempt={attempt}/{attempts} "
+                f"error={type(exc).__name__}: {exc}; sleeping={sleep_s:.2f}s"
+            )
+            time.sleep(sleep_s)
+
+
 def _extract_tar(tar_path: Path, target_dir: Path):
     tmp_dir = target_dir.parent / f".restore-{_ts()}"
     if tmp_dir.exists():
@@ -80,18 +99,30 @@ def backup(args):
         print(f"[backup] estado vacio en {state_dir}, no se sube snapshot")
         return 0
 
-    client = _build_client(args.oci_config, args.oci_profile)
+    client = _call_with_retries(
+        args,
+        "build_client",
+        lambda: _build_client(args.oci_config, args.oci_profile),
+    )
     stamp = _ts()
     object_name = _make_object_name(args.prefix, args.kind, stamp)
     latest_name = _latest_pointer_name(args.prefix, args.kind)
 
     data = _tar_state(state_dir)
-    client.put_object(args.namespace, args.bucket, object_name, data)
+    _call_with_retries(
+        args,
+        f"put_object:{object_name}",
+        lambda: client.put_object(args.namespace, args.bucket, object_name, data),
+    )
 
     latest_payload = json.dumps(
         {"object": object_name, "timestamp": stamp, "kind": args.kind}
     ).encode("utf-8")
-    client.put_object(args.namespace, args.bucket, latest_name, latest_payload)
+    _call_with_retries(
+        args,
+        f"put_object:{latest_name}",
+        lambda: client.put_object(args.namespace, args.bucket, latest_name, latest_payload),
+    )
     print(f"[backup] subido {object_name}")
 
     if args.retention_days > 0:
@@ -99,17 +130,30 @@ def backup(args):
     return 0
 
 
-def _list_objects(client, namespace: str, bucket: str, prefix: str):
+def _list_objects(client, namespace: str, bucket: str, prefix: str, args=None):
     next_start = None
     out = []
     while True:
-        res = client.list_objects(
-            namespace,
-            bucket,
-            prefix=prefix,
-            start=next_start,
-            fields="name,timeCreated",
-        ).data
+        if args is None:
+            res = client.list_objects(
+                namespace,
+                bucket,
+                prefix=prefix,
+                start=next_start,
+                fields="name,timeCreated",
+            ).data
+        else:
+            res = _call_with_retries(
+                args,
+                f"list_objects:{prefix}",
+                lambda: client.list_objects(
+                    namespace,
+                    bucket,
+                    prefix=prefix,
+                    start=next_start,
+                    fields="name,timeCreated",
+                ).data,
+            )
         out.extend(res.objects or [])
         if not res.next_start_with:
             break
@@ -121,7 +165,11 @@ def _latest_snapshot_name_by_kind(client, args, kind: str) -> Optional[str]:
     kind_prefix = f"{_prefix_path(args.prefix)}/{kind}/"
     latest_ptr = _latest_pointer_name(args.prefix, kind)
     try:
-        ptr = client.get_object(args.namespace, args.bucket, latest_ptr).data.content
+        ptr = _call_with_retries(
+            args,
+            f"get_object:{latest_ptr}",
+            lambda: client.get_object(args.namespace, args.bucket, latest_ptr).data.content,
+        )
         payload = json.loads(ptr.decode("utf-8"))
         object_name = payload.get("object")
         if object_name:
@@ -130,7 +178,7 @@ def _latest_snapshot_name_by_kind(client, args, kind: str) -> Optional[str]:
         pass
 
     candidates = []
-    for obj in _list_objects(client, args.namespace, args.bucket, kind_prefix):
+    for obj in _list_objects(client, args.namespace, args.bucket, kind_prefix, args=args):
         if obj.name.endswith(".tar.gz"):
             candidates.append(obj)
     if not candidates:
@@ -153,7 +201,11 @@ def restore(args):
         print(f"[restore] estado ya inicializado en {state_dir}, se omite restore")
         return 0
 
-    client = _build_client(args.oci_config, args.oci_profile)
+    client = _call_with_retries(
+        args,
+        "build_client",
+        lambda: _build_client(args.oci_config, args.oci_profile),
+    )
     object_name = _latest_snapshot_name(client, args)
     if not object_name:
         print("[restore] no hay snapshots disponibles")
@@ -161,7 +213,11 @@ def restore(args):
 
     with tempfile.TemporaryDirectory() as tmp:
         tar_path = Path(tmp) / "state.tar.gz"
-        resp = client.get_object(args.namespace, args.bucket, object_name).data.content
+        resp = _call_with_retries(
+            args,
+            f"get_object:{object_name}",
+            lambda: client.get_object(args.namespace, args.bucket, object_name).data.content,
+        )
         _write_bytes(tar_path, resp)
         _extract_tar(tar_path, state_dir)
     print(f"[restore] restaurado {object_name} en {state_dir}")
@@ -169,10 +225,14 @@ def restore(args):
 
 
 def prune(args, client=None):
-    own_client = client or _build_client(args.oci_config, args.oci_profile)
+    own_client = client or _call_with_retries(
+        args,
+        "build_client",
+        lambda: _build_client(args.oci_config, args.oci_profile),
+    )
     cutoff = _utc_now() - timedelta(days=args.retention_days)
     root_prefix = f"{_prefix_path(args.prefix)}/{args.kind}/"
-    objects = _list_objects(own_client, args.namespace, args.bucket, root_prefix)
+    objects = _list_objects(own_client, args.namespace, args.bucket, root_prefix, args=args)
 
     deleted = 0
     for obj in objects:
@@ -180,7 +240,11 @@ def prune(args, client=None):
             continue
         created = obj.time_created
         if created and created < cutoff:
-            own_client.delete_object(args.namespace, args.bucket, obj.name)
+            _call_with_retries(
+                args,
+                f"delete_object:{obj.name}",
+                lambda: own_client.delete_object(args.namespace, args.bucket, obj.name),
+            )
             deleted += 1
     print(f"[prune] eliminados={deleted} cutoff={cutoff.isoformat()}")
     return 0
@@ -203,12 +267,18 @@ def loop(args):
         ):
             daily_args = argparse.Namespace(**vars(args))
             daily_args.kind = "daily"
-            backup(daily_args)
+            try:
+                backup(daily_args)
+            except Exception as exc:
+                print(f"[loop] daily backup failed: {type(exc).__name__}: {exc}")
             last_daily = day_key
 
         checkpoint_args = argparse.Namespace(**vars(args))
         checkpoint_args.kind = "checkpoint"
-        backup(checkpoint_args)
+        try:
+            backup(checkpoint_args)
+        except Exception as exc:
+            print(f"[loop] checkpoint backup failed: {type(exc).__name__}: {exc}")
         time.sleep(interval)
 
 
@@ -220,6 +290,16 @@ def build_parser():
     parser.add_argument("--prefix", default=os.getenv("OPENCLAW_BUCKET_PREFIX", "openclaw/snapshots"))
     parser.add_argument("--oci-config", default=os.getenv("OCI_CONFIG_PATH", "/opt/oci/config"))
     parser.add_argument("--oci-profile", default=os.getenv("OCI_PROFILE", "DEFAULT"))
+    parser.add_argument(
+        "--oci-max-retries",
+        type=int,
+        default=int(os.getenv("OPENCLAW_OCI_MAX_RETRIES", "3")),
+    )
+    parser.add_argument(
+        "--oci-retry-base-seconds",
+        type=float,
+        default=float(os.getenv("OPENCLAW_OCI_RETRY_BASE_SECONDS", "2")),
+    )
     parser.add_argument("--retention-days", type=int, default=int(os.getenv("OPENCLAW_RETENTION_DAYS", "10")))
     parser.add_argument("--kind", default="checkpoint", choices=["checkpoint", "daily", "prestop"])
 

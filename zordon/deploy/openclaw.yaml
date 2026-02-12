@@ -81,6 +81,8 @@ spec:
           env:
             - name: HOME
               value: /home/node
+            - name: NODE_OPTIONS
+              value: --dns-result-order=ipv4first
           ports:
             - containerPort: 18789
           volumeMounts:

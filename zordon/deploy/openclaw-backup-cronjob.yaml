@@ -6,10 +6,14 @@ metadata:
 spec:
   schedule: "${OPENCLAW_DAILY_CRON}"
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
   successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
   jobTemplate:
     spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
       template:
         metadata:
           labels:
