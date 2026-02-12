@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Identity, Integer, String, Text, TIMESTAMP, text
+from sqlalchemy import Column, Float, ForeignKey, Identity, Integer, String, Text, TIMESTAMP, text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -66,7 +66,7 @@ class JobResult(Base):
     result_json = Column(Text)
     output_ref = Column(String(2000))
     duration_ms = Column(Integer)
-    audio_duration_seconds = Column(Integer)
+    audio_duration_seconds = Column(Float)
     started_at = Column(TIMESTAMP(timezone=False))
     finished_at = Column(TIMESTAMP(timezone=False))
     created_at = Column(TIMESTAMP(timezone=False), server_default=text("SYSTIMESTAMP"))
