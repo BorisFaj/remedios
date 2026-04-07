@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: openclaw-backup
+  namespace: remedios
+spec:
+  schedule: "${OPENCLAW_DAILY_CRON}"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: openclaw-backup
+        spec:
+          imagePullSecrets:
+            - name: ghcr-creds
+          restartPolicy: Never
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: app
+                        operator: In
+                        values:
+                          - openclaw
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: openclaw-backup
+              image: "${OPENCLAW_SNAPSHOT_IMAGE}"
+              imagePullPolicy: Always
+              command: ["python", "/app/openclaw_snapshot.py", "--kind", "daily", "backup"]
+              envFrom:
+                - configMapRef:
+                    name: openclaw-config
+                - secretRef:
+                    name: remedios-secrets
+              env:
+                - name: OCI_CONFIG_PATH
+                  value: /opt/oci/config
+              volumeMounts:
+                - name: openclaw-state
+                  mountPath: /home/node/.openclaw
+                - name: oci-config
+                  mountPath: /opt/oci
+                  readOnly: true
+          volumes:
+            - name: openclaw-state
+              persistentVolumeClaim:
+                claimName: openclaw-pvc
+            - name: oci-config
+              secret:
+                secretName: oci-config

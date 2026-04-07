@@ -23,6 +23,8 @@ from remedios.core.routing import kafka_route, api_route
 GRAPH_API_TOKEN = os.environ.get("GRAPH_API_TOKEN")
 GRAPH_URL = os.environ.get("GRAPH_URL")
 __HEADERS = {"Authorization": "Bearer {}".format(GRAPH_API_TOKEN)}
+WHATSAPP_TEXT_LIMIT = int(os.environ.get("WHATSAPP_TEXT_LIMIT", "4000"))
+PART_PREFIX_RESERVE = int(os.environ.get("WHATSAPP_PART_PREFIX_RESERVE", "12"))
 
 # logs
 sys.stdout.reconfigure(line_buffering=True)
@@ -97,15 +99,58 @@ def _build_object_key(job_id: int, audio_id: str, mime_type: str | None) -> str:
     return f"{OCI_BUCKET_PREFIX}/{job_id}/{audio_id}{ext}"
 
 
-def _send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
-    response_data = {
+def _split_text_for_whatsapp(text: str, max_chars: int = WHATSAPP_TEXT_LIMIT) -> list[str]:
+    """Parte texto en chunks priorizando corte por línea/espacio, con fallback duro."""
+    normalized = str(text or "").strip()
+    if not normalized:
+        return [""]
+
+    chunk_budget = max(1, max_chars - PART_PREFIX_RESERVE)
+    parts: list[str] = []
+    pending = normalized
+    while pending:
+        if len(pending) <= chunk_budget:
+            piece = pending.strip()
+            if piece:
+                parts.append(piece)
+            break
+
+        window = pending[:chunk_budget + 1]
+        cut = max(window.rfind("\n"), window.rfind(" "))
+        if cut <= 0:
+            cut = chunk_budget
+        piece = pending[:cut].strip()
+        if piece:
+            parts.append(piece)
+        pending = pending[cut:].lstrip()
+
+    return parts or [normalized[:chunk_budget]]
+
+
+def _send_graph_text(text: str, phone_number: str, number_id: str, message_id: str):
+    payload = {
         "messaging_product": "whatsapp",
         "to": phone_number,
         "text": {"body": text},
         "context": {"message_id": message_id},
     }
+    return _post_graph(f"{GRAPH_URL}/{number_id}/messages", payload)
 
-    _post_graph(f"{GRAPH_URL}/{number_id}/messages", response_data)
+
+def _send_text_answer(text: str, phone_number: str, message_id: str, number_id: str):
+    parts = _split_text_for_whatsapp(text)
+    total = len(parts)
+    for i, part in enumerate(parts, start=1):
+        body = f"({i}/{total}) {part}" if total > 1 else part
+        resp = _send_graph_text(body, phone_number, number_id, message_id)
+        if resp.status_code >= 400:
+            logger.error(
+                "Graph text part failed part=%s/%s status=%s body=%s",
+                i,
+                total,
+                resp.status_code,
+                resp.text,
+            )
 
     mark_read_data = {
         "messaging_product": "whatsapp",
@@ -274,6 +319,23 @@ def internal_job_result():
 
     if not job_id or result is None:
         return jsonify({"error": "job_id and result are required"}), 400
+
+    try:
+        job_id = int(job_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "job_id must be an integer"}), 400
+
+    if duration_ms is not None:
+        try:
+            duration_ms = int(duration_ms)
+        except (TypeError, ValueError):
+            return jsonify({"error": "duration_ms must be an integer"}), 400
+
+    if audio_duration_seconds is not None:
+        try:
+            audio_duration_seconds = float(audio_duration_seconds)
+        except (TypeError, ValueError):
+            return jsonify({"error": "audio_duration_seconds must be a number"}), 400
 
     # Parse timestamps in ISO format if provided.
     def parse_dt(val):

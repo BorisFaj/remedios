@@ -19,6 +19,9 @@
     dispatcher_image: "ghcr.io/borisfaj/remedios-dispatcher:latest"
     api_image: "ghcr.io/borisfaj/remedios-api:latest"
     whisper_turbo_manifest: "{{ app_root }}/deploy/audio_whisperturbo.yaml"
+    openclaw_manifest: "{{ app_root }}/deploy/openclaw.yaml"
+    openclaw_backup_manifest: "{{ app_root }}/deploy/openclaw-backup-cronjob.yaml"
+    openclaw_ui_manifest: "{{ app_root }}/deploy/openclaw-ui-ingress.yaml"
   tasks:
     - name: Verificar que existe el fichero .secrets en el controlador
       stat:
@@ -84,7 +87,7 @@
       become: false
       when:
         - oci_config_src | length > 0
-        - (deploy_remedios_api | default(false) | bool) == true
+        - (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
 
     - name: Validar que existe OCI key en el controlador (si se definió)
       stat:
@@ -95,13 +98,13 @@
       become: false
       when:
         - oci_key_src | length > 0
-        - (deploy_remedios_api | default(false) | bool) == true
+        - (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
 
     - name: Abortar si falta OCI config o key
       fail:
         msg: "OCI_CONFIG_PATH y OCI_API_KEY_PATH deben existir en el controlador. Ajusta .secrets."
       when:
-        - (deploy_remedios_api | default(false) | bool) == true
+        - (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
         - >
           (oci_config_src | length == 0) or (oci_key_src | length == 0) or
           (oci_config_file.stat is defined and not oci_config_file.stat.exists) or
@@ -197,7 +200,7 @@
         - oci_config_src | length > 0
         - oci_config_file.stat is defined
         - oci_config_file.stat.exists
-        - (deploy_remedios_api | default(false) | bool) == true
+        - (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
 
     - name: Copiar OCI API key al master
       copy:
@@ -208,7 +211,7 @@
         - oci_key_src | length > 0
         - oci_key_file.stat is defined
         - oci_key_file.stat.exists
-        - (deploy_remedios_api | default(false) | bool) == true
+        - (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
 
     - name: Crear/actualizar secret oci-config (config + key)
       shell: |
@@ -231,7 +234,7 @@
         - oci_config_file.stat.exists
         - oci_key_file.stat is defined
         - oci_key_file.stat.exists
-        - (deploy_remedios_api | default(false) | bool) == true
+        - (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
 
     - name: Verificar secret oci-config en namespace remedios
       shell: |
@@ -239,7 +242,7 @@
       register: oci_secret_check
       changed_when: false
       failed_when: oci_secret_check.rc != 0
-      when: (deploy_remedios_api | default(false) | bool) == true
+      when: (deploy_remedios_api | default(false) | bool) == true or (deploy_openclaw | default(false) | bool) == true
 
 
     - name: Copiar network policy de remedios (dispatcher)
@@ -291,6 +294,72 @@
         mode: "0644"
       when: (deploy_whisper_turbo | default(false) | bool) == true
 
+    - name: Copiar manifiesto de openclaw
+      copy:
+        src: ../deploy/openclaw.yaml
+        dest: "{{ openclaw_manifest }}"
+        mode: "0644"
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Copiar manifiesto de backup diario de openclaw
+      copy:
+        src: ../deploy/openclaw-backup-cronjob.yaml
+        dest: "{{ openclaw_backup_manifest }}"
+        mode: "0644"
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Copiar manifiesto de ingress UI de openclaw
+      copy:
+        src: ../deploy/openclaw-ui-ingress.yaml
+        dest: "{{ openclaw_ui_manifest }}"
+        mode: "0644"
+      when: deploy_openclaw_ui is defined
+
+    - name: Renderizar manifiestos de openclaw con variables de .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        : "${OPENCLAW_IMAGE:=ghcr.io/borisfaj/openclaw:latest}"
+        : "${OPENCLAW_SNAPSHOT_IMAGE:=ghcr.io/borisfaj/openclaw-snapshot:latest}"
+        : "${OPENCLAW_RUNTIME_VERSION:=2026.4.2}"
+        : "${OPENCLAW_GATEWAY_AUTH:=none}"
+        : "${OPENCLAW_CHAT_WORKSPACE:=/home/node/.openclaw/chat-workspace}"
+        : "${OPENCLAW_RESTORE_MODE:=if-empty}"
+        : "${OPENCLAW_PVC_SIZE:=5Gi}"
+        : "${OPENCLAW_STORAGE_CLASS:=local-path}"
+        : "${OPENCLAW_BUCKET_PREFIX:=openclaw/snapshots}"
+        : "${OPENCLAW_RETENTION_DAYS:=10}"
+        : "${OPENCLAW_CHECKPOINT_INTERVAL_MINUTES:=30}"
+        : "${OPENCLAW_DAILY_HOUR_UTC:=3}"
+        : "${OPENCLAW_DAILY_MINUTE_UTC:=0}"
+        : "${OPENCLAW_DAILY_CRON:=0 3 * * *}"
+
+        export OPENCLAW_IMAGE OPENCLAW_SNAPSHOT_IMAGE OPENCLAW_RUNTIME_VERSION OPENCLAW_GATEWAY_AUTH OPENCLAW_CHAT_WORKSPACE OPENCLAW_RESTORE_MODE
+        export OPENCLAW_PVC_SIZE OPENCLAW_STORAGE_CLASS
+        export OPENCLAW_BUCKET_PREFIX OPENCLAW_RETENTION_DAYS OPENCLAW_CHECKPOINT_INTERVAL_MINUTES
+        export OPENCLAW_DAILY_HOUR_UTC OPENCLAW_DAILY_MINUTE_UTC OPENCLAW_DAILY_CRON
+        envsubst < {{ openclaw_manifest }} > /tmp/openclaw.rendered.yaml
+        envsubst < {{ openclaw_backup_manifest }} > /tmp/openclaw-backup.rendered.yaml
+      args:
+        executable: /bin/bash
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Renderizar ingress UI de openclaw con variables de .secrets
+      shell: |
+        set -a
+        . {{ app_root }}/.secrets
+        set +a
+        if [ -z "${OPENCLAW_UI_HOST:-}" ]; then
+          echo "OPENCLAW_UI_HOST debe estar definido en {{ app_root }}/.secrets para activar la UI" >&2
+          exit 1
+        fi
+        export OPENCLAW_UI_HOST
+        envsubst < {{ openclaw_ui_manifest }} > /tmp/openclaw-ui.rendered.yaml
+      args:
+        executable: /bin/bash
+      when: (deploy_openclaw_ui | default(false) | bool) == true
+
     - name: Aplicar manifiesto de whisper-turbo
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ whisper_turbo_manifest }}
       when: (deploy_whisper_turbo | default(false) | bool) == true
@@ -327,7 +396,7 @@
     - name: Crear/actualizar secret remedios-secrets desde .secrets (sin ORACLE_WALLET_PATH)
       shell: |
         tmp=$(mktemp)
-        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN|OCI_CONFIG_PATH|OCI_API_KEY_PATH)=' {{ app_root }}/.secrets > "$tmp"
+        grep -Ev '^(ORACLE_WALLET_PATH|ORACLE_DSN|OCI_CONFIG_PATH|OCI_API_KEY_PATH|OPENCLAW_GATEWAY_TOKEN)=' {{ app_root }}/.secrets > "$tmp"
         dsn="{{ oracle_dsn }}"
         if [ -z "$dsn" ] && [ -f "{{ wallet_dir }}/tnsnames.ora" ]; then
           dsn=$(awk 'match($0,/^[[:space:]]*([A-Za-z0-9._-]+)[[:space:]]*=/,a){print a[1]; exit}' {{ wallet_dir }}/tnsnames.ora)
@@ -342,7 +411,7 @@
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
         rm -f "$tmp"
-      when: (deploy_dispatcher | default(false) | bool) or (deploy_remedios_api | default(false) | bool) or (deploy_remetext | default(false) | bool) or (deploy_whisper_turbo | default(false) | bool)
+      when: (deploy_dispatcher | default(false) | bool) or (deploy_remedios_api | default(false) | bool) or (deploy_remetext | default(false) | bool) or (deploy_whisper_turbo | default(false) | bool) or (deploy_openclaw | default(false) | bool)
 
     - name: Crear/actualizar pull secret ghcr-creds para GHCR (si hay credenciales)
       shell: |
@@ -359,17 +428,45 @@
           -n remedios \
           --dry-run=client -o yaml | kubectl --kubeconfig={{ kubeconfig }} apply -f -
 
+    - name: Aplicar manifiesto de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/openclaw.rendered.yaml
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Aplicar cronjob de backup diario de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/openclaw-backup.rendered.yaml
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Reiniciar deployment openclaw para coger cambios
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/openclaw -n remedios
+      register: restart_openclaw
+      changed_when: "'restarted' in restart_openclaw.stdout or restart_openclaw.rc == 0"
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Esperar rollout de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/openclaw -n remedios
+      when: (deploy_openclaw | default(false) | bool) == true
+
+    - name: Aplicar ingress UI de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f /tmp/openclaw-ui.rendered.yaml
+      when: (deploy_openclaw_ui | default(false) | bool) == true
+
+    - name: Desactivar ingress UI de openclaw
+      command: kubectl --kubeconfig={{ kubeconfig }} delete ingress/openclaw-ui -n remedios --ignore-not-found=true
+      when:
+        - deploy_openclaw_ui is defined
+        - (deploy_openclaw_ui | bool) == false
+
 
     - name: Aplicar manifiesto de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} apply -n remedios -f {{ app_root }}/deploy/remetext.yaml
-      when: (deploy_remetext | default(true) | bool) == true
+      when: (deploy_remetext | default(false) | bool) == true
 
     - name: Reiniciar deployment remetext para coger cambios
       command: kubectl --kubeconfig={{ kubeconfig }} rollout restart deployment/remetext -n remedios
       register: restart_out
       changed_when: "'restarted' in restart_out.stdout or restart_out.rc == 0"
-      when: (deploy_remetext | default(true) | bool) == true
+      when: (deploy_remetext | default(false) | bool) == true
 
     - name: Esperar rollout de remetext
       command: kubectl --kubeconfig={{ kubeconfig }} rollout status deployment/remetext -n remedios
-      when: (deploy_remetext | default(true) | bool) == true
+      when: (deploy_remetext | default(false) | bool) == true
