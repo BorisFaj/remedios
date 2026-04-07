@@ -40,6 +40,10 @@ OCI_BUCKET_NAMESPACE=tu_namespace
 # OpenClaw (optional)
 OPENCLAW_IMAGE=ghcr.io/tu-org/openclaw:latest
 OPENCLAW_SNAPSHOT_IMAGE=ghcr.io/tu-org/openclaw-snapshot:latest
+OPENCLAW_RUNTIME_VERSION=2026.4.2
+OPENCLAW_GATEWAY_AUTH=none
+OPENCLAW_CHAT_WORKSPACE=/home/node/.openclaw/chat-workspace
+OPENCLAW_RESTORE_MODE=if-empty
 OPENCLAW_PVC_SIZE=5Gi
 OPENCLAW_STORAGE_CLASS=local-path
 OPENCLAW_BUCKET_PREFIX=openclaw/snapshots

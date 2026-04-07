@@ -88,8 +88,15 @@ def _extract_tar(tar_path: Path, target_dir: Path):
     if not source.exists():
         raise RuntimeError("Snapshot corrupto: no contiene carpeta 'state'")
     if target_dir.exists():
-        shutil.rmtree(target_dir)
-    shutil.move(str(source), str(target_dir))
+        for child in target_dir.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        for child in source.iterdir():
+            shutil.move(str(child), str(target_dir / child.name))
+    else:
+        shutil.move(str(source), str(target_dir))
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -121,7 +128,9 @@ def backup(args):
     _call_with_retries(
         args,
         f"put_object:{latest_name}",
-        lambda: client.put_object(args.namespace, args.bucket, latest_name, latest_payload),
+        lambda: client.put_object(
+            args.namespace, args.bucket, latest_name, latest_payload
+        ),
     )
     print(f"[backup] subido {object_name}")
 
@@ -168,7 +177,9 @@ def _latest_snapshot_name_by_kind(client, args, kind: str) -> Optional[str]:
         ptr = _call_with_retries(
             args,
             f"get_object:{latest_ptr}",
-            lambda: client.get_object(args.namespace, args.bucket, latest_ptr).data.content,
+            lambda: client.get_object(
+                args.namespace, args.bucket, latest_ptr
+            ).data.content,
         )
         payload = json.loads(ptr.decode("utf-8"))
         object_name = payload.get("object")
@@ -178,12 +189,16 @@ def _latest_snapshot_name_by_kind(client, args, kind: str) -> Optional[str]:
         pass
 
     candidates = []
-    for obj in _list_objects(client, args.namespace, args.bucket, kind_prefix, args=args):
+    for obj in _list_objects(
+        client, args.namespace, args.bucket, kind_prefix, args=args
+    ):
         if obj.name.endswith(".tar.gz"):
             candidates.append(obj)
     if not candidates:
         return None
-    candidates.sort(key=lambda o: o.time_created or datetime.min.replace(tzinfo=timezone.utc))
+    candidates.sort(
+        key=lambda o: o.time_created or datetime.min.replace(tzinfo=timezone.utc)
+    )
     return candidates[-1].name
 
 
@@ -197,6 +212,9 @@ def _latest_snapshot_name(client, args) -> Optional[str]:
 
 def restore(args):
     state_dir = Path(args.state_dir)
+    if args.mode == "skip":
+        print("[restore] restore desactivado por configuracion")
+        return 0
     if args.mode == "if-empty" and _state_non_empty(state_dir):
         print(f"[restore] estado ya inicializado en {state_dir}, se omite restore")
         return 0
@@ -216,7 +234,9 @@ def restore(args):
         resp = _call_with_retries(
             args,
             f"get_object:{object_name}",
-            lambda: client.get_object(args.namespace, args.bucket, object_name).data.content,
+            lambda: client.get_object(
+                args.namespace, args.bucket, object_name
+            ).data.content,
         )
         _write_bytes(tar_path, resp)
         _extract_tar(tar_path, state_dir)
@@ -232,7 +252,9 @@ def prune(args, client=None):
     )
     cutoff = _utc_now() - timedelta(days=args.retention_days)
     root_prefix = f"{_prefix_path(args.prefix)}/{args.kind}/"
-    objects = _list_objects(own_client, args.namespace, args.bucket, root_prefix, args=args)
+    objects = _list_objects(
+        own_client, args.namespace, args.bucket, root_prefix, args=args
+    )
 
     deleted = 0
     for obj in objects:
@@ -284,11 +306,17 @@ def loop(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Snapshot/restore de estado OpenClaw")
-    parser.add_argument("--state-dir", default=os.getenv("OPENCLAW_STATE_DIR", "/home/node/.openclaw"))
+    parser.add_argument(
+        "--state-dir", default=os.getenv("OPENCLAW_STATE_DIR", "/home/node/.openclaw")
+    )
     parser.add_argument("--namespace", default=os.getenv("OCI_BUCKET_NAMESPACE"))
     parser.add_argument("--bucket", default=os.getenv("OCI_BUCKET_NAME"))
-    parser.add_argument("--prefix", default=os.getenv("OPENCLAW_BUCKET_PREFIX", "openclaw/snapshots"))
-    parser.add_argument("--oci-config", default=os.getenv("OCI_CONFIG_PATH", "/opt/oci/config"))
+    parser.add_argument(
+        "--prefix", default=os.getenv("OPENCLAW_BUCKET_PREFIX", "openclaw/snapshots")
+    )
+    parser.add_argument(
+        "--oci-config", default=os.getenv("OCI_CONFIG_PATH", "/opt/oci/config")
+    )
     parser.add_argument("--oci-profile", default=os.getenv("OCI_PROFILE", "DEFAULT"))
     parser.add_argument(
         "--oci-max-retries",
@@ -300,19 +328,31 @@ def build_parser():
         type=float,
         default=float(os.getenv("OPENCLAW_OCI_RETRY_BASE_SECONDS", "2")),
     )
-    parser.add_argument("--retention-days", type=int, default=int(os.getenv("OPENCLAW_RETENTION_DAYS", "10")))
-    parser.add_argument("--kind", default="checkpoint", choices=["checkpoint", "daily", "prestop"])
+    parser.add_argument(
+        "--retention-days",
+        type=int,
+        default=int(os.getenv("OPENCLAW_RETENTION_DAYS", "10")),
+    )
+    parser.add_argument(
+        "--kind", default="checkpoint", choices=["checkpoint", "daily", "prestop"]
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("backup", help="Crea y sube snapshot")
 
     restore_parser = sub.add_parser("restore", help="Restaura snapshot")
-    restore_parser.add_argument("--mode", default=os.getenv("OPENCLAW_RESTORE_MODE", "if-empty"), choices=["if-empty", "force-latest"])
+    restore_parser.add_argument(
+        "--mode",
+        default=os.getenv("OPENCLAW_RESTORE_MODE", "if-empty"),
+        choices=["skip", "if-empty", "force-latest"],
+    )
 
     sub.add_parser("prune", help="Aplica retencion")
 
-    loop_parser = sub.add_parser("loop", help="Loop periodico de checkpoints y backup diario")
+    loop_parser = sub.add_parser(
+        "loop", help="Loop periodico de checkpoints y backup diario"
+    )
     loop_parser.add_argument(
         "--interval-minutes",
         type=int,
@@ -332,7 +372,11 @@ def build_parser():
 
 
 def validate_common(args):
-    required = [("namespace", args.namespace), ("bucket", args.bucket), ("oci-config", args.oci_config)]
+    required = [
+        ("namespace", args.namespace),
+        ("bucket", args.bucket),
+        ("oci-config", args.oci_config),
+    ]
     missing = [name for name, value in required if not value]
     if missing:
         raise RuntimeError(f"Faltan parametros requeridos: {', '.join(missing)}")

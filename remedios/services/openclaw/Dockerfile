@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm i -g openclaw@2026.2.2-3 \
+RUN npm i -g openclaw@2026.4.2 \
   && npm cache clean --force
 
 USER node

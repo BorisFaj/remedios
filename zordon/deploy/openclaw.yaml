@@ -6,9 +6,12 @@ metadata:
 data:
   OPENCLAW_PORT: "18789"
   OPENCLAW_STATE_DIR: "/home/node/.openclaw"
+  OPENCLAW_CHAT_WORKSPACE: "${OPENCLAW_CHAT_WORKSPACE}"
+  OPENCLAW_RUNTIME_VERSION: "${OPENCLAW_RUNTIME_VERSION}"
+  OPENCLAW_GATEWAY_AUTH: "${OPENCLAW_GATEWAY_AUTH}"
   OPENCLAW_BUCKET_PREFIX: "${OPENCLAW_BUCKET_PREFIX}"
   OPENCLAW_RETENTION_DAYS: "${OPENCLAW_RETENTION_DAYS}"
-  OPENCLAW_RESTORE_MODE: "if-empty"
+  OPENCLAW_RESTORE_MODE: "${OPENCLAW_RESTORE_MODE}"
   OPENCLAW_CHECKPOINT_INTERVAL_MINUTES: "${OPENCLAW_CHECKPOINT_INTERVAL_MINUTES}"
   OPENCLAW_DAILY_HOUR_UTC: "${OPENCLAW_DAILY_HOUR_UTC}"
   OPENCLAW_DAILY_MINUTE_UTC: "${OPENCLAW_DAILY_MINUTE_UTC}"
@@ -51,7 +54,8 @@ spec:
         - name: openclaw-restore
           image: "${OPENCLAW_SNAPSHOT_IMAGE}"
           imagePullPolicy: Always
-          command: ["python", "/app/openclaw_snapshot.py", "restore", "--mode", "if-empty"]
+          command: ["python", "/app/openclaw_snapshot.py", "restore", "--mode", "${OPENCLAW_RESTORE_MODE}"]
+          args: []
           envFrom:
             - configMapRef:
                 name: openclaw-config
@@ -70,7 +74,25 @@ spec:
         - name: openclaw
           image: "${OPENCLAW_IMAGE}"
           imagePullPolicy: Always
-          args: ["gateway", "--allow-unconfigured"]
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - >-
+              export NPM_CONFIG_PREFIX=/home/node/.openclaw/.npm-global;
+              export PATH=/home/node/.openclaw/.npm-global/bin:$PATH;
+              mkdir -p /home/node/.openclaw/.npm-global;
+              [ -x /home/node/.openclaw/.npm-global/bin/openclaw ] || npm i -g "openclaw@${OPENCLAW_RUNTIME_VERSION}";
+              mkdir -p "${OPENCLAW_CHAT_WORKSPACE}";
+              cd /home/node/.openclaw/.npm-global/lib/node_modules/openclaw;
+              npm i --no-save grammy @grammyjs/runner @grammyjs/transformer-throttler @slack/web-api @slack/bolt;
+              printf '%b' 'const dns = require("dns");\nconst http = require("http");\nconst https = require("https");\nconst { URL } = require("url");\nfunction resolve4(hostname) { return new Promise((resolve, reject) => dns.resolve4(hostname, (err, addrs) => err ? reject(err) : resolve(addrs[0]))); }\nglobalThis.fetch = async (input, init = {}) => {\n  const target = typeof input === "string" ? input : input.url;\n  const url = new URL(target);\n  const method = init.method || "GET";\n  const headers = new Headers(init.headers || {});\n  const body = init.body;\n  const isHttps = url.protocol === "https:";\n  return await new Promise(async (resolve, reject) => {\n    try {\n      let options;\n      if (isHttps) {\n        try {\n          const address = await resolve4(url.hostname);\n          headers.set("host", url.host);\n          options = { protocol: url.protocol, host: address, servername: url.hostname, port: url.port || 443, path: url.pathname + url.search, method, headers: Object.fromEntries(headers.entries()) };\n        } catch {\n          options = url;\n        }\n      } else {\n        options = url;\n      }\n      const lib = isHttps ? https : http;\n      const req = lib.request(options, (res) => {\n        const chunks = [];\n        res.on("data", (c) => chunks.push(c));\n        res.on("end", () => resolve(new Response(Buffer.concat(chunks), { status: res.statusCode, headers: res.headers })));\n      });\n      req.on("error", reject);\n      if (body) req.write(body);\n      req.end();\n    } catch (err) {\n      reject(err);\n    }\n  });\n};\n' > /home/node/.openclaw/force-undici-ipv4.cjs;
+              /home/node/.openclaw/.npm-global/bin/openclaw config set agents.defaults.workspace '"${OPENCLAW_CHAT_WORKSPACE}"' --strict-json;
+              exec /home/node/.openclaw/.npm-global/bin/openclaw gateway run
+              --allow-unconfigured
+              --port 18789
+              --bind loopback
+              --auth "${OPENCLAW_GATEWAY_AUTH}"
           tty: true
           stdin: true
           envFrom:
@@ -82,7 +104,7 @@ spec:
             - name: HOME
               value: /home/node
             - name: NODE_OPTIONS
-              value: --dns-result-order=ipv4first
+              value: --dns-result-order=ipv4first --require /home/node/.openclaw/force-undici-ipv4.cjs
           ports:
             - containerPort: 18789
           volumeMounts:

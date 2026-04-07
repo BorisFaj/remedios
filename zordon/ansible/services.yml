@@ -322,6 +322,10 @@
         set +a
         : "${OPENCLAW_IMAGE:=ghcr.io/borisfaj/openclaw:latest}"
         : "${OPENCLAW_SNAPSHOT_IMAGE:=ghcr.io/borisfaj/openclaw-snapshot:latest}"
+        : "${OPENCLAW_RUNTIME_VERSION:=2026.4.2}"
+        : "${OPENCLAW_GATEWAY_AUTH:=none}"
+        : "${OPENCLAW_CHAT_WORKSPACE:=/home/node/.openclaw/chat-workspace}"
+        : "${OPENCLAW_RESTORE_MODE:=if-empty}"
         : "${OPENCLAW_PVC_SIZE:=5Gi}"
         : "${OPENCLAW_STORAGE_CLASS:=local-path}"
         : "${OPENCLAW_BUCKET_PREFIX:=openclaw/snapshots}"
@@ -331,7 +335,8 @@
         : "${OPENCLAW_DAILY_MINUTE_UTC:=0}"
         : "${OPENCLAW_DAILY_CRON:=0 3 * * *}"
 
-        export OPENCLAW_IMAGE OPENCLAW_SNAPSHOT_IMAGE OPENCLAW_PVC_SIZE OPENCLAW_STORAGE_CLASS
+        export OPENCLAW_IMAGE OPENCLAW_SNAPSHOT_IMAGE OPENCLAW_RUNTIME_VERSION OPENCLAW_GATEWAY_AUTH OPENCLAW_CHAT_WORKSPACE OPENCLAW_RESTORE_MODE
+        export OPENCLAW_PVC_SIZE OPENCLAW_STORAGE_CLASS
         export OPENCLAW_BUCKET_PREFIX OPENCLAW_RETENTION_DAYS OPENCLAW_CHECKPOINT_INTERVAL_MINUTES
         export OPENCLAW_DAILY_HOUR_UTC OPENCLAW_DAILY_MINUTE_UTC OPENCLAW_DAILY_CRON
         envsubst < {{ openclaw_manifest }} > /tmp/openclaw.rendered.yaml
